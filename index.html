@@ -1,98 +1,23 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>아울렛 할인 캘린더</title>
+  <link rel="stylesheet" href="style.css" />
   <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css' rel='stylesheet' />
   <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js'></script>
   <script src="https://apis.google.com/js/api.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    #calendar { max-width: 900px; margin: 0 auto; }
-    .fc-event-title { font-weight: bold; }
-    .filter-bar { text-align: center; margin-bottom: 20px; }
-    .filter-btn {
-      background: #007bff; color: white; border: none; padding: 6px 12px;
-      margin: 0 4px; border-radius: 4px; cursor: pointer;
-    }
-    .filter-btn.active { background: #0056b3; }
-  </style>
 </head>
 <body>
+  <h1 style="text-align:center">아울렛 할인 캘린더</h1>
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="filterEvents('ALL')">전체</button>
+    <button class="filter-btn" onclick="filterEvents('송도')">송도</button>
+    <button class="filter-btn" onclick="filterEvents('김포')">김포</button>
+    <button class="filter-btn" onclick="filterEvents('스페이스원')">스페이스원</button>
+  </div>
+  <div id="calendar"></div>
 
-<h1 style="text-align:center">아울렛 할인 캘린더</h1>
-<div class="filter-bar">
-  <button class="filter-btn active" onclick="filterEvents('ALL')">전체</button>
-  <button class="filter-btn" onclick="filterEvents('송도')">송도</button>
-  <button class="filter-btn" onclick="filterEvents('김포')">김포</button>
-  <button class="filter-btn" onclick="filterEvents('스페이스원')">스페이스원</button>
-</div>
-
-<div id='calendar'></div>
-
-<script>
-  let calendar;
-  let rawEvents = [];
-
-  function initCalendar(events) {
-    const calendarEl = document.getElementById('calendar');
-    calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
-      locale: 'ko',
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,listMonth'
-      },
-      events: events,
-      eventClick: function(info) {
-        alert(info.event.title + "\n" + info.event.extendedProps.description);
-      }
-    });
-    calendar.render();
-  }
-
-  function filterEvents(outlet) {
-    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-
-    const filtered = outlet === 'ALL'
-      ? rawEvents
-      : rawEvents.filter(e => e.outlet === outlet);
-
-    calendar.removeAllEvents();
-    filtered.forEach(event => calendar.addEvent(event));
-  }
-
-  function parseSheetData(data) {
-    const rows = data.values.slice(1); // skip header
-    return rows.map(row => ({
-      title: `[${row[11]}] ${row[0]}`,
-      start: row[1].split('~')[0].trim().replace(/\./g, '-'),
-      end: row[1].split('~')[1].trim().replace(/\./g, '-'),
-      description: row[6],
-      outlet: row[11]
-    }));
-  }
-
-  function loadSheetData() {
-    const sheetId = '16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18';
-    const apiKey = 'AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8';
-    const range = 'Sheet1!A2:L';
-
-    gapi.load('client', () => {
-      gapi.client.init({ apiKey }).then(() => {
-        return gapi.client.request({
-          path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`
-        });
-      }).then(response => {
-        rawEvents = parseSheetData(response.result);
-        initCalendar(rawEvents);
-      }, err => console.error('Sheet Load Error', err));
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', loadSheetData);
-</script>
+  <script src="script.js"></script>
 </body>
 </html>
