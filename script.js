@@ -20,8 +20,11 @@ function initCalendar(events) {
 }
 
 function filterEvents(outlet) {
-  document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+  const buttons = document.querySelectorAll('.filter-btn');
+  buttons.forEach(btn => btn.classList.remove('active'));
   event.target.classList.add('active');
+
+  if (!calendar) return;
 
   const filtered = outlet === 'ALL'
     ? rawEvents
@@ -32,27 +35,31 @@ function filterEvents(outlet) {
 }
 
 function parseSheetData(data) {
-  const rows = data.values.slice(1);
+  const rows = data.values.slice(1); // skip header
   return rows.map(row => {
-    const brand = row[11] || '기타';
+    const brand = row[11] || '';
     const title = `[${brand}] ${row[0] || ''}`;
-    const description = row[6] || '';
-    const period = row[1] || '';
-    const [start, end] = period.includes('~') ? period.split('~').map(p => p.trim().replace(/\./g, '-')) : [null, null];
-    
+
+    let start = '', end = '';
+    if (row[1]) {
+      const period = row[1].split('~');
+      start = (period[0] || '').trim().replace(/\./g, '-');
+      end = (period[1] || '').trim().replace(/\./g, '-');
+    }
+
     return {
-      title,
-      start,
-      end,
-      description,
+      title: title,
+      start: start,
+      end: end,
+      description: row[6] || '',
       outlet: brand
     };
   });
 }
 
 function loadSheetData() {
-  const sheetId = '16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18';
-  const apiKey = 'AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8';
+  const sheetId = '16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18'; // 본인 시트 ID로 교체
+  const apiKey = 'AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8';       // 본인 API 키로 교체
   const range = 'Sheet1!A2:L';
 
   gapi.load('client', () => {
