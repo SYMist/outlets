@@ -1,13 +1,12 @@
 body {
-  font-family: Arial, sans-serif;
-  margin: 40px;
-  background: #f9f9f9;
+  font-family: 'Arial', sans-serif;
+  margin: 40px 20px;
+  background-color: #f9f9f9;
   color: #333;
 }
 
 h1 {
   text-align: center;
-  font-size: 28px;
   margin-bottom: 20px;
 }
 
@@ -22,7 +21,7 @@ h1 {
   border: none;
   padding: 8px 16px;
   margin: 0 6px;
-  border-radius: 6px;
+  border-radius: 5px;
   font-size: 14px;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -33,7 +32,7 @@ h1 {
 }
 
 .filter-btn.active {
-  background: #004095;
+  background: #0056b3;
 }
 
 #calendar {
@@ -42,11 +41,31 @@ h1 {
   background: white;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
-/* 캘린더 내 이벤트 텍스트 스타일 */
+/* FullCalendar 커스터마이징 */
+.fc .fc-toolbar-title {
+  font-size: 1.4em;
+}
+
 .fc-event-title {
   font-weight: bold;
   font-size: 13px;
+}
+
+.fc-daygrid-event-dot {
+  display: none;
+}
+
+@media screen and (max-width: 768px) {
+  .filter-btn {
+    margin: 4px 2px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  #calendar {
+    padding: 10px;
+  }
 }
