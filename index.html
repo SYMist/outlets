@@ -5,6 +5,7 @@
   <title>아울렛 할인 캘린더</title>
   <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css' rel='stylesheet' />
   <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js'></script>
+  <script src="https://apis.google.com/js/api.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
     #calendar { max-width: 900px; margin: 0 auto; }
@@ -30,33 +31,10 @@
 <div id='calendar'></div>
 
 <script>
-  const rawEvents = [
-    {
-      title: "[송도] 올리브영 스페셜 프로모션",
-      start: "2025-05-11",
-      end: "2025-05-18",
-      description: "최대 30% 할인 + 1:1 두피 진단 증정",
-      outlet: "송도"
-    },
-    {
-      title: "[김포] 유니클로 피크닉 위크",
-      start: "2025-05-14",
-      end: "2025-05-18",
-      description: "정상가 49,000원 → 29,900원",
-      outlet: "김포"
-    },
-    {
-      title: "[스페이스원] 나이키 창고 개방전",
-      start: "2025-05-10",
-      end: "2025-05-20",
-      description: "최대 60% 할인 + 추가 10% 쿠폰",
-      outlet: "스페이스원"
-    }
-  ];
-
   let calendar;
+  let rawEvents = [];
 
-  document.addEventListener('DOMContentLoaded', function () {
+  function initCalendar(events) {
     const calendarEl = document.getElementById('calendar');
     calendar = new FullCalendar.Calendar(calendarEl, {
       initialView: 'dayGridMonth',
@@ -66,13 +44,13 @@
         center: 'title',
         right: 'dayGridMonth,listMonth'
       },
-      events: rawEvents,
+      events: events,
       eventClick: function(info) {
         alert(info.event.title + "\n" + info.event.extendedProps.description);
       }
     });
     calendar.render();
-  });
+  }
 
   function filterEvents(outlet) {
     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -85,6 +63,36 @@
     calendar.removeAllEvents();
     filtered.forEach(event => calendar.addEvent(event));
   }
+
+  function parseSheetData(data) {
+    const rows = data.values.slice(1); // skip header
+    return rows.map(row => ({
+      title: `[${row[11]}] ${row[0]}`,
+      start: row[1].split('~')[0].trim().replace(/\./g, '-'),
+      end: row[1].split('~')[1].trim().replace(/\./g, '-'),
+      description: row[6],
+      outlet: row[11]
+    }));
+  }
+
+  function loadSheetData() {
+    const sheetId = '16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18';
+    const apiKey = 'AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8';
+    const range = 'Sheet1!A2:L';
+
+    gapi.load('client', () => {
+      gapi.client.init({ apiKey }).then(() => {
+        return gapi.client.request({
+          path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`
+        });
+      }).then(response => {
+        rawEvents = parseSheetData(response.result);
+        initCalendar(rawEvents);
+      }, err => console.error('Sheet Load Error', err));
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', loadSheetData);
 </script>
 </body>
 </html>
