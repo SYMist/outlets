@@ -1,0 +1,27 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 40px;
+}
+#calendar {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.fc-event-title {
+  font-weight: bold;
+}
+.filter-bar {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.filter-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  margin: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.filter-btn.active {
+  background: #0056b3;
+}
