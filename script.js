@@ -27,12 +27,12 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // 2️⃣ 이벤트 필터링
-  function filterEvents(outlet) {
+  function filterEvents(outlet, e) {
     document
-      .querySelectorAll(".filter-btn")
-      .forEach((btn) => btn.classList.remove("active"));
-    event.target.classList.add("active");
-
+    .querySelectorAll(".filter-btn")
+    .forEach((btn) => btn.classList.remove("active"));
+  e.target.classList.add("active");
+    
     if (!calendar) return;
 
     const filtered =
