@@ -81,6 +81,7 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(
           (response) => {
             rawEvents = parseSheetData(response.result);
+            console.log("✅ 로드된 이벤트", rawEvents); // 이 줄 추가
             initCalendar(rawEvents);
           },
           (error) => {
