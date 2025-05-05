@@ -2,6 +2,11 @@ document.addEventListener("DOMContentLoaded", function () {
   let calendar;
   let rawEvents = [];
 
+  const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18";
+  const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8";
+  const range = "Sheet1!A2:L";
+
+  // 1️⃣ FullCalendar 초기화
   function initCalendar(events) {
     const calendarEl = document.getElementById("calendar");
     calendar = new FullCalendar.Calendar(calendarEl, {
@@ -14,12 +19,14 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       events: events,
       eventClick: function (info) {
-        alert(info.event.title + "\n" + info.event.extendedProps.description);
+        const { title, extendedProps } = info.event;
+        alert(`${title}\n${extendedProps.description || ""}`);
       },
     });
     calendar.render();
   }
 
+  // 2️⃣ 이벤트 필터링
   function filterEvents(outlet) {
     document
       .querySelectorAll(".filter-btn")
@@ -34,55 +41,55 @@ document.addEventListener("DOMContentLoaded", function () {
         : rawEvents.filter((e) => e.outlet === outlet);
 
     calendar.removeAllEvents();
-    filtered.forEach((event) => calendar.addEvent(event));
+    calendar.addEventSource(filtered);
   }
 
-  // filterEvents 함수 전역에 노출 (버튼에서 호출 가능하도록)
+  // 전역 노출 (버튼에서 접근 가능)
   window.filterEvents = filterEvents;
 
+  // 3️⃣ 시트 데이터 → 이벤트 객체로 파싱
   function parseSheetData(data) {
-    const rows = data.values.slice(1); // skip header
+    const rows = data.values;
+    if (!rows || rows.length < 1) return [];
 
     return rows
-      .filter((row) => row.length >= 12 && row[0] && row[1]) // 필수 필드 있는 것만
+      .filter((row) => row.length >= 12 && row[0] && row[1]) // title, date 필수
       .map((row) => {
-        const title = `[${row[11]}] ${row[0]}`;
-        const dates = row[1].split("~");
-        const start = dates[0].trim().replace(/\./g, "-");
-        const end = dates[1]?.trim().replace(/\./g, "-");
+        const [titleRaw, dateRange, , , , , description, , , , , outlet] = row;
+        const [start, end] = dateRange.split("~").map((d) => d.trim().replace(/\./g, "-"));
 
         return {
-          title,
+          title: `[${outlet || "기타"}] ${titleRaw}`,
           start,
-          end,
-          description: row[6] || "",
-          outlet: row[11] || "기타",
+          end: end || undefined,
+          description: description || "",
+          outlet: outlet || "기타",
         };
       });
   }
 
+  // 4️⃣ 구글 시트 불러오기
   function loadSheetData() {
-    const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18"; // 실제 시트 ID로 교체
-    const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8"; // 실제 키로 교체
-    const range = "Sheet1!A2:L";
-
     gapi.load("client", () => {
       gapi.client
         .init({ apiKey })
-        .then(() => {
-          return gapi.client.request({
+        .then(() =>
+          gapi.client.request({
             path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`,
-          });
-        })
+          })
+        )
         .then(
           (response) => {
             rawEvents = parseSheetData(response.result);
             initCalendar(rawEvents);
           },
-          (err) => console.error("Sheet Load Error", err)
+          (error) => {
+            console.error("🛑 Google Sheet API Error:", error);
+          }
         );
     });
   }
 
+  // 5️⃣ 캘린더 시작
   loadSheetData();
 });
