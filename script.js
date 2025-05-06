@@ -48,34 +48,46 @@ document.addEventListener("DOMContentLoaded", function () {
   window.filterEvents = filterEvents;
 
   // 3️⃣ 시트 데이터 → 이벤트 객체로 파싱
-  function parseSheetData(data) {
-  const rows = data.values.slice(1); // 헤더 제외
-
-  const uniqueEvents = new Map();
-
-  rows.forEach((row) => {
-    if (row.length < 12 || !row[0] || !row[1] || !row[11]) return;
-
-    const title = `[${row[11]}] ${row[0]}`;
-    const dates = row[1].split("~");
-    const start = dates[0]?.trim().replace(/\./g, "-");
-    const end = dates[1]?.trim().replace(/\./g, "-");
-    const description = row[6] || ""; // 혜택 설명
-    const outlet = row[11];
-
-    // 이벤트 고유 키 구성: 지점명 + 제목 + 기간
-    const key = `${title}-${start}-${end}`;
-
-    if (!uniqueEvents.has(key)) {
-      uniqueEvents.set(key, {
-        title,
-        start,
-        end,
-        description,
-        outlet,
-      });
-    }
+    function parseSheetData(data) {
+      const rows = data.values.slice(1); // 헤더 제외
+    
+      const uniqueEvents = new Map();
+    
+      rows.forEach((row) => {
+        if (row.length < 7 || !row[0] || !row[1]) return;
+    
+        const rawTitle = row[0].trim(); // A열
+        const rawPeriod = row[1].trim(); // B열
+        const description = row[6]?.trim() || ""; // G열
+    
+        // 기간 파싱
+        const dates = rawPeriod.split("~");
+        const start = dates[0]?.trim().replace(/\./g, "-");
+        const end = dates[1]?.trim().replace(/\./g, "-");
+    
+        // 아울렛명 추출
+        const outletMatch = rawTitle.match(/\[(.+?)\]/);
+        const outlet = outletMatch ? outletMatch[1] : "기타";
+    
+        // FullCalendar에 표시할 제목
+        const title = rawTitle;
+    
+        // 중복 제거용 키
+        const key = `${title}-${start}-${end}`;
+    
+        if (!uniqueEvents.has(key)) {
+          uniqueEvents.set(key, {
+            title,
+            start,
+            end,
+            description,
+            outlet,
+          });
+        }
   });
+
+  return Array.from(uniqueEvents.values());
+}
 
   return Array.from(uniqueEvents.values());
 }
