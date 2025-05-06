@@ -49,19 +49,19 @@ document.addEventListener("DOMContentLoaded", function () {
     return `${year}-${month}-${day}`;
   }
 
-  function parseSheetData(data) {
-    const rows = data.values.slice(1); // 헤더 제외
+  function parseSheetData(data, outletLabel) {
+    const rows = data.values.slice(1);
     const uniqueEvents = new Map();
 
     rows.forEach((row) => {
       if (row.length < 11 || !row[0] || !row[1]) return;
 
-      const rawTitle = row[0].trim(); // A
-      const rawPeriod = row[1].trim(); // B
-      const benefit = row[6]?.trim() || ""; // G
-      const brand = row[7]?.trim() || "";   // H
-      const product = row[8]?.trim() || ""; // I
-      const price = row[9]?.trim() || "";   // J
+      const rawTitle = row[0].trim();
+      const rawPeriod = row[1].trim();
+      const benefit = row[6]?.trim() || "";
+      const brand = row[7]?.trim() || "";
+      const product = row[8]?.trim() || "";
+      const price = row[9]?.trim() || "";
 
       const dates = rawPeriod.split("~");
       const start = parseDate(dates[0]);
@@ -69,11 +69,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (!start || !end) return;
 
-      const outletMatch = rawTitle.match(/\[(.+?)\]/);
-      const outlet = outletMatch ? outletMatch[1] : "기타";
-
       const title = rawTitle;
-      const key = `${title}-${start}-${end}`;
+      const key = `${title}-${start}-${end}-${outletLabel}`;
 
       const details = [
         benefit && `혜택: ${benefit}`,
@@ -88,7 +85,7 @@ document.addEventListener("DOMContentLoaded", function () {
           start,
           end,
           description: details,
-          outlet,
+          outlet: outletLabel,
         });
       } else {
         const existing = uniqueEvents.get(key);
@@ -99,29 +96,33 @@ document.addEventListener("DOMContentLoaded", function () {
     return Array.from(uniqueEvents.values());
   }
 
-  function loadSheetData() {
+  function loadAllSheets() {
     const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18";
     const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8";
-    const range = "Sheet1!A2:K";
+    const sheetConfigs = [
+      { name: "Sheet1", outlet: "송도" },
+      { name: "Sheet2", outlet: "김포" },
+      { name: "Sheet3", outlet: "스페이스원" },
+    ];
 
     gapi.load("client", () => {
-      gapi.client
-        .init({ apiKey })
-        .then(() => {
-          return gapi.client.request({
-            path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`,
-          });
-        })
-        .then(
-          (response) => {
-            rawEvents = parseSheetData(response.result);
-            console.log("✅ 로드된 이벤트", rawEvents);
-            initCalendar(rawEvents);
-          },
-          (err) => console.error("❌ 시트 데이터 로딩 실패", err)
+      gapi.client.init({ apiKey }).then(() => {
+        const requests = sheetConfigs.map(({ name, outlet }) =>
+          gapi.client.request({
+            path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${name}!A2:K`,
+          }).then((res) => parseSheetData(res.result, outlet))
         );
+
+        Promise.all(requests)
+          .then((allEventGroups) => {
+            rawEvents = allEventGroups.flat();
+            console.log("✅ 모든 시트 이벤트 로드 완료", rawEvents);
+            initCalendar(rawEvents);
+          })
+          .catch((err) => console.error("❌ 시트 데이터 로딩 실패", err));
+      });
     });
   }
 
-  loadSheetData();
+  loadAllSheets();
 });
