@@ -37,12 +37,22 @@ document.addEventListener("DOMContentLoaded", function () {
     filtered.forEach((event) => calendar.addEvent(event));
   }
 
-  // 버튼 클릭 시 접근 가능하게 전역으로 노출
   window.filterEvents = filterEvents;
+
+  // 👉 MM.DD(요일) 형식을 YYYY-MM-DD로 변환
+  function parseDate(text) {
+    const match = text.trim().match(/(\d{2})\.(\d{2})/);
+    if (!match) return null;
+
+    const year = new Date().getFullYear(); // 현재 연도 사용
+    const month = match[1];
+    const day = match[2];
+
+    return `${year}-${month}-${day}`;
+  }
 
   function parseSheetData(data) {
     const rows = data.values.slice(1); // 헤더 제외
-
     const uniqueEvents = new Map();
 
     rows.forEach((row) => {
@@ -52,18 +62,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const rawPeriod = row[1].trim(); // B열: 기간
       const description = row[6]?.trim() || ""; // G열: 혜택 설명
 
-      // 기간 파싱
+      // 기간 파싱 (예: "04.18(금) ~ 04.27(일)")
       const dates = rawPeriod.split("~");
-      const start = dates[0]?.trim().replace(/\./g, "-");
-      const end = dates[1]?.trim().replace(/\./g, "-");
+      const start = parseDate(dates[0]);
+      const end = parseDate(dates[1]);
+
+      if (!start || !end) return;
 
       // 아울렛명 추출
       const outletMatch = rawTitle.match(/\[(.+?)\]/);
       const outlet = outletMatch ? outletMatch[1] : "기타";
 
       const title = rawTitle;
-
-      // 고유 키로 중복 제거
       const key = `${title}-${start}-${end}`;
 
       if (!uniqueEvents.has(key)) {
@@ -81,8 +91,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function loadSheetData() {
-    const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18"; // 실제 시트 ID
-    const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8"; // 실제 API 키
+    const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18";
+    const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8";
     const range = "Sheet1!A2:K";
 
     gapi.load("client", () => {
