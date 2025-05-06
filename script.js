@@ -14,7 +14,8 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       events: events,
       eventClick: function (info) {
-        alert(info.event.title + "\n" + info.event.extendedProps.description);
+        const desc = info.event.extendedProps.description;
+        alert(info.event.title + "\n\n" + desc);
       },
     });
     calendar.render();
@@ -39,15 +40,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   window.filterEvents = filterEvents;
 
-  // 👉 MM.DD(요일) 형식을 YYYY-MM-DD로 변환
   function parseDate(text) {
     const match = text.trim().match(/(\d{2})\.(\d{2})/);
     if (!match) return null;
-
-    const year = new Date().getFullYear(); // 현재 연도 사용
+    const year = new Date().getFullYear();
     const month = match[1];
     const day = match[2];
-
     return `${year}-${month}-${day}`;
   }
 
@@ -56,34 +54,45 @@ document.addEventListener("DOMContentLoaded", function () {
     const uniqueEvents = new Map();
 
     rows.forEach((row) => {
-      if (row.length < 7 || !row[0] || !row[1]) return;
+      if (row.length < 11 || !row[0] || !row[1]) return;
 
-      const rawTitle = row[0].trim(); // A열: 제목
-      const rawPeriod = row[1].trim(); // B열: 기간
-      const description = row[6]?.trim() || ""; // G열: 혜택 설명
+      const rawTitle = row[0].trim(); // A
+      const rawPeriod = row[1].trim(); // B
+      const benefit = row[6]?.trim() || ""; // G
+      const brand = row[7]?.trim() || "";   // H
+      const product = row[8]?.trim() || ""; // I
+      const price = row[9]?.trim() || "";   // J
 
-      // 기간 파싱 (예: "04.18(금) ~ 04.27(일)")
       const dates = rawPeriod.split("~");
       const start = parseDate(dates[0]);
       const end = parseDate(dates[1]);
 
       if (!start || !end) return;
 
-      // 아울렛명 추출
       const outletMatch = rawTitle.match(/\[(.+?)\]/);
       const outlet = outletMatch ? outletMatch[1] : "기타";
 
       const title = rawTitle;
       const key = `${title}-${start}-${end}`;
 
+      const details = [
+        benefit && `혜택: ${benefit}`,
+        brand && `브랜드: ${brand}`,
+        product && `제품명: ${product}`,
+        price && `가격: ${price}`
+      ].filter(Boolean).join("\n");
+
       if (!uniqueEvents.has(key)) {
         uniqueEvents.set(key, {
           title,
           start,
           end,
-          description,
+          description: details,
           outlet,
         });
+      } else {
+        const existing = uniqueEvents.get(key);
+        existing.description += "\n\n" + details;
       }
     });
 
