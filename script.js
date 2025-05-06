@@ -49,24 +49,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // 3️⃣ 시트 데이터 → 이벤트 객체로 파싱
   function parseSheetData(data) {
-    const rows = data.values;
-    if (!rows || rows.length < 1) return [];
+  const rows = data.values.slice(1); // 헤더 제외
 
-    return rows
-      .filter((row) => row.length >= 12 && row[0] && row[1]) // title, date 필수
-      .map((row) => {
-        const [titleRaw, dateRange, , , , , description, , , , , outlet] = row;
-        const [start, end] = dateRange.split("~").map((d) => d.trim().replace(/\./g, "-"));
+  const uniqueEvents = new Map();
 
-        return {
-          title: `[${outlet || "기타"}] ${titleRaw}`,
-          start,
-          end: end || undefined,
-          description: description || "",
-          outlet: outlet || "기타",
-        };
+  rows.forEach((row) => {
+    if (row.length < 12 || !row[0] || !row[1] || !row[11]) return;
+
+    const title = `[${row[11]}] ${row[0]}`;
+    const dates = row[1].split("~");
+    const start = dates[0]?.trim().replace(/\./g, "-");
+    const end = dates[1]?.trim().replace(/\./g, "-");
+    const description = row[6] || ""; // 혜택 설명
+    const outlet = row[11];
+
+    // 이벤트 고유 키 구성: 지점명 + 제목 + 기간
+    const key = `${title}-${start}-${end}`;
+
+    if (!uniqueEvents.has(key)) {
+      uniqueEvents.set(key, {
+        title,
+        start,
+        end,
+        description,
+        outlet,
       });
-  }
+    }
+  });
+
+  return Array.from(uniqueEvents.values());
+}
 
   // 4️⃣ 구글 시트 불러오기
   function loadSheetData() {
