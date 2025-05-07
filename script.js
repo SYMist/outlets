@@ -2,6 +2,14 @@ document.addEventListener("DOMContentLoaded", function () {
   let calendar;
   let rawEvents = [];
 
+  const SHEET_ID = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18"; // 구글 시트 ID
+  const API_KEY = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8"; // API 키
+  const SHEET_MAP = {
+    Sheet1: "송도",
+    Sheet2: "김포",
+    Sheet3: "스페이스원"
+  };
+
   function initCalendar(events) {
     const calendarEl = document.getElementById("calendar");
     calendar = new FullCalendar.Calendar(calendarEl, {
@@ -10,116 +18,110 @@ document.addEventListener("DOMContentLoaded", function () {
       headerToolbar: {
         left: "prev,next today",
         center: "title",
-        right: "dayGridMonth,listMonth",
+        right: "dayGridMonth,listMonth"
       },
       events: events,
       eventClick: function (info) {
-        const desc = info.event.extendedProps.description;
-        alert(info.event.title + "\n\n" + desc);
-      },
+        const { title, extendedProps } = info.event;
+        const { description, items = [] } = extendedProps;
+
+        let content = `<strong>${title}</strong>`;
+        if (description) content += `<br><br><strong>혜택:</strong> ${description}`;
+        if (items.length > 0) {
+          items.forEach((item) => {
+            content += `<br><br>${item.replace(/\n/g, "<br>")}`;
+          });
+        }
+
+        const modal = document.createElement("div");
+        modal.innerHTML = `
+          <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center;">
+            <div style="background:white; padding:20px; border-radius:8px; max-width:400px;">
+              ${content}
+              <div style="text-align:right; margin-top:20px;">
+                <button onclick="this.closest('div').remove()" style="padding:6px 12px;">닫기</button>
+              </div>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+      }
     });
     calendar.render();
   }
 
   function filterEvents(outlet) {
-    document
-      .querySelectorAll(".filter-btn")
-      .forEach((btn) => btn.classList.remove("active"));
+    document.querySelectorAll(".filter-btn").forEach((btn) => btn.classList.remove("active"));
     event.target.classList.add("active");
 
     if (!calendar) return;
 
-    const filtered =
-      outlet === "ALL"
-        ? rawEvents
-        : rawEvents.filter((e) => e.outlet === outlet);
-
+    const filtered = outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
     calendar.removeAllEvents();
     filtered.forEach((event) => calendar.addEvent(event));
   }
 
   window.filterEvents = filterEvents;
 
-  function parseDate(text) {
-    const match = text.trim().match(/(\d{2})\.(\d{2})/);
-    if (!match) return null;
+  function normalizeDate(dateStr) {
     const year = new Date().getFullYear();
-    const month = match[1];
-    const day = match[2];
-    return `${year}-${month}-${day}`;
+    const match = dateStr.match(/(\\d{2})\\.(\\d{2})\\(.*?\\)\\s*~\\s*(\\d{2})\\.(\\d{2})/);
+    if (!match) return [null, null];
+    const [, m1, d1, m2, d2] = match;
+    const start = `${year}-${m1.padStart(2, "0")}-${d1.padStart(2, "0")}`;
+    const end = `${year}-${m2.padStart(2, "0")}-${(parseInt(d2) + 1).toString().padStart(2, "0")}`;
+    return [start, end];
   }
 
-  function parseSheetData(data, outletLabel) {
+  function parseSheetData(sheetName, data) {
+    const outlet = SHEET_MAP[sheetName];
     const rows = data.values.slice(1);
-    const uniqueEvents = new Map();
+    const eventsMap = new Map();
 
     rows.forEach((row) => {
-      if (row.length < 11 || !row[0] || !row[1]) return;
+      const title = row[0] || "";
+      const period = row[1] || "";
+      const description = row[6] || "";
+      const brand = row[7] || "";
+      const productName = row[8] || "";
+      const price = row[9] || "";
 
-      const rawTitle = row[0].trim();
-      const rawPeriod = row[1].trim();
-      const benefit = row[6]?.trim() || "";
-      const brand = row[7]?.trim() || "";
-      const product = row[8]?.trim() || "";
-      const price = row[9]?.trim() || "";
-
-      const dates = rawPeriod.split("~");
-      const start = parseDate(dates[0]);
-      const end = parseDate(dates[1]);
-
+      const [start, end] = normalizeDate(period);
       if (!start || !end) return;
 
-      const title = rawTitle;
-      const key = `${title}-${start}-${end}-${outletLabel}`;
-
-      const details = [
-        benefit && `혜택: ${benefit}`,
-        brand && `브랜드: ${brand}`,
-        product && `제품명: ${product}`,
-        price && `가격: ${price}`
-      ].filter(Boolean).join("\n");
-
-      if (!uniqueEvents.has(key)) {
-        uniqueEvents.set(key, {
-          title,
+      const key = `${title}_${period}_${description}_${outlet}`;
+      if (!eventsMap.has(key)) {
+        eventsMap.set(key, {
+          title: `[${outlet}] ${title}`,
           start,
           end,
-          description: details,
-          outlet: outletLabel,
+          description,
+          outlet,
+          items: []
         });
-      } else {
-        const existing = uniqueEvents.get(key);
-        existing.description += "\n\n" + details;
+      }
+
+      const event = eventsMap.get(key);
+      if (brand || productName || price) {
+        event.items.push(`브랜드: ${brand}\n제품명: ${productName}\n가격: ${price}`);
       }
     });
 
-    return Array.from(uniqueEvents.values());
+    return Array.from(eventsMap.values());
   }
 
   function loadAllSheets() {
-    const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18";
-    const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8";
-    const sheetConfigs = [
-      { name: "Sheet1", outlet: "송도" },
-      { name: "Sheet2", outlet: "김포" },
-      { name: "Sheet3", outlet: "스페이스원" },
-    ];
-
     gapi.load("client", () => {
-      gapi.client.init({ apiKey }).then(() => {
-        const requests = sheetConfigs.map(({ name, outlet }) =>
+      gapi.client.init({ apiKey: API_KEY }).then(() => {
+        const requests = Object.keys(SHEET_MAP).map((sheetName) =>
           gapi.client.request({
-            path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${name}!A2:K`,
-          }).then((res) => parseSheetData(res.result, outlet))
+            path: `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${sheetName}!A2:K`
+          }).then((response) => parseSheetData(sheetName, response.result))
         );
 
-        Promise.all(requests)
-          .then((allEventGroups) => {
-            rawEvents = allEventGroups.flat();
-            console.log("✅ 모든 시트 이벤트 로드 완료", rawEvents);
-            initCalendar(rawEvents);
-          })
-          .catch((err) => console.error("❌ 시트 데이터 로딩 실패", err));
+        Promise.all(requests).then((results) => {
+          rawEvents = results.flat();
+          initCalendar(rawEvents);
+        }).catch((err) => console.error("데이터 로드 실패", err));
       });
     });
   }
