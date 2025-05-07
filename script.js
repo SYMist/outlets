@@ -120,6 +120,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         Promise.all(requests).then((results) => {
           rawEvents = results.flat();
+          console.log("📦 최종 이벤트", rawEvents);  // ← 이거 추가
           initCalendar(rawEvents);
         }).catch((err) => console.error("데이터 로드 실패", err));
       });
