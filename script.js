@@ -124,21 +124,26 @@ document.addEventListener("DOMContentLoaded", function () {
   loadAllSheets();
 
   // 🧩 모달 로직 추가
-  function showModal(event) {
-    const modal = document.getElementById("event-modal");
-    const overlay = document.getElementById("modal-overlay");
+function showModal(event) {
+  const modal = document.getElementById("event-modal");
+  const overlay = document.getElementById("modal-overlay");
 
-    document.getElementById("modal-title").innerText = event.title;
+  document.getElementById("modal-title").innerText = event.title;
 
-    let html = "";
-    html += `<p>${event.extendedProps.description}</p>`;
-    event.extendedProps.items.forEach((item) => {
-      descHTML += `<div><strong>상품명:</strong> ${item.name}</div>`;
-      if (item.brand) {
-        descHTML += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
-      }
-      descHTML += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
-    });
+  let html = "";
+  html += `<p>${event.extendedProps.description}</p>`;
+  event.extendedProps.items.forEach((item) => {
+    html += `<div><strong>상품명:</strong> ${item.product}</div>`;
+    if (item.brand) {
+      html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
+    }
+    html += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
+  });
+
+  document.getElementById("modal-desc").innerHTML = html;
+  overlay.style.display = "block";
+  modal.style.display = "block";
+}
 
     document.getElementById("modal-desc").innerHTML = html;
     overlay.style.display = "block";
