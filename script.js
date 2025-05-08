@@ -28,8 +28,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (!calendar) return;
 
-    const filtered =
-      outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
+    const filtered = outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
 
     calendar.removeAllEvents();
     filtered.forEach((event) => calendar.addEvent(event));
@@ -39,7 +38,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function parseSheetData(data, outletName) {
     const rows = data.values.slice(1); // skip header
-
     const grouped = {};
 
     for (const row of rows) {
@@ -77,7 +75,7 @@ document.addEventListener("DOMContentLoaded", function () {
         };
       }
 
-      grouped[key].items.push({ brand, product, price });
+      grouped[key].items.push({ brand, name: product, price });
     }
 
     return Object.values(grouped);
@@ -108,11 +106,9 @@ document.addEventListener("DOMContentLoaded", function () {
       gapi.client.init({ apiKey }).then(() => {
         Promise.all(
           sheets.map((s) =>
-            gapi.client
-              .request({
-                path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${s.name}!A2:K`,
-              })
-              .then((response) => parseSheetData(response.result, s.outlet))
+            gapi.client.request({
+              path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${s.name}!A2:K`,
+            }).then((response) => parseSheetData(response.result, s.outlet))
           )
         ).then((results) => {
           rawEvents = results.flat();
@@ -125,7 +121,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   loadAllSheets();
 
-  // 🧩 모달 로직 추가
+  // 모달
   function showModal(event) {
     const modal = document.getElementById("event-modal");
     const overlay = document.getElementById("modal-overlay");
@@ -134,12 +130,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let html = "";
     html += `<p>${event.extendedProps.description}</p>`;
+
     event.extendedProps.items.forEach((item) => {
-      html += `<div><strong>상품명:</strong> ${item.product}</div>`;
-      if (item.brand) {
-        html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
+      if (item.name || item.brand || item.price) {
+        html += `<div style="margin-top: 10px;">`;
+        if (item.name) {
+          html += `<div><strong>상품명:</strong> ${item.name}</div>`;
+        }
+        if (item.brand) {
+          html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
+        }
+        if (item.price) {
+          html += `<div><strong>가격:</strong> ${item.price}</div>`;
+        }
+        html += `<hr/></div>`;
       }
-      html += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
     });
 
     document.getElementById("modal-desc").innerHTML = html;
