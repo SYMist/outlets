@@ -125,7 +125,8 @@ document.addEventListener("DOMContentLoaded", function () {
     event.extendedProps.items.forEach((item) => {
       if (item.product) html += `<div><strong>상품명:</strong> ${item.product}</div>`;
       if (item.brand) html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
-      html += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
+      if (item.price) html += `<div><strong>가격:</strong> ${item.price}</div>`;
+      html += `<hr/>`;
     });
 
     document.getElementById("modal-desc").innerHTML = html;
