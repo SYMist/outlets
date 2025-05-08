@@ -27,15 +27,21 @@
 
   <div id="calendar"></div>
 
-  <!-- ✅ 모달 오버레이 및 본체 -->
+  <!-- ✅ 모달 오버레이 -->
   <div id="modal-overlay" style="display:none;"></div>
+
+  <!-- ✅ 모달 콘텐츠 -->
   <div id="event-modal" style="display:none;">
-    <h2 id="modal-title"></h2>
-    <div id="modal-desc"></div>
-    <button onclick="closeModal()" class="modal-close-btn">닫기</button>
+    <div class="modal-content">
+      <img id="modal-thumbnail" src="" alt="썸네일" class="modal-thumb" />
+      <h2 id="modal-title"></h2>
+      <div id="modal-desc"></div>
+      <button onclick="closeModal()" class="modal-close-btn">닫기</button>
+    </div>
   </div>
 
   <!-- ✅ 사용자 정의 JS -->
   <script src="script.js"></script>
+
 </body>
 </html>
