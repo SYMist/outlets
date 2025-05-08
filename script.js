@@ -28,7 +28,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (!calendar) return;
 
-    const filtered = outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
+    const filtered =
+      outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
 
     calendar.removeAllEvents();
     filtered.forEach((event) => calendar.addEvent(event));
@@ -37,26 +38,19 @@ document.addEventListener("DOMContentLoaded", function () {
   window.filterEvents = filterEvents;
 
   function parseSheetData(data, outletName) {
-    const rows = data.values.slice(1); // skip header
+    const rows = data.values.slice(1);
     const grouped = {};
 
     for (const row of rows) {
       if (row.length < 11 || !row[0] || !row[1]) continue;
 
-      const title = row[0];
-      const period = row[1];
-      const desc = row[6] || "";
-      const brand = row[7] || "";
-      const product = row[8] || "";
-      const price = row[9] || "";
+      const [title, period, , , thumbnail, , desc, brand, product, price] = row;
 
       const dates = period.split("~");
       if (dates.length !== 2) continue;
-      const startRaw = dates[0].trim();
-      const endRaw = dates[1].trim();
 
-      const start = parseDate(startRaw);
-      const end = parseDate(endRaw);
+      const start = parseDate(dates[0].trim());
+      const end = parseDate(dates[1].trim());
 
       if (!start || !end) {
         console.log("❌ 날짜 파싱 제외 대상:", period);
@@ -71,11 +65,12 @@ document.addEventListener("DOMContentLoaded", function () {
           end,
           description: desc,
           outlet: outletName,
+          thumbnail: thumbnail || "",
           items: [],
         };
       }
 
-      grouped[key].items.push({ brand, name: product, price });
+      grouped[key].items.push({ brand, product, price });
     }
 
     return Object.values(grouped);
@@ -121,7 +116,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   loadAllSheets();
 
-  // 모달
+  // 🧩 모달 로직
   function showModal(event) {
     const modal = document.getElementById("event-modal");
     const overlay = document.getElementById("modal-overlay");
@@ -129,13 +124,23 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("modal-title").innerText = event.title;
 
     let html = "";
-    html += `<p>${event.extendedProps.description}</p>`;
 
+    // 썸네일
+    if (event.extendedProps.thumbnail) {
+      html += `<div style="margin-bottom:10px;"><img src="${event.extendedProps.thumbnail}" style="width:100%; border-radius:8px;" /></div>`;
+    }
+
+    // 혜택 설명
+    if (event.extendedProps.description) {
+      html += `<p>${event.extendedProps.description}</p>`;
+    }
+
+    // 상품 리스트
     event.extendedProps.items.forEach((item) => {
-      if (item.name || item.brand || item.price) {
-        html += `<div style="margin-top: 10px;">`;
-        if (item.name) {
-          html += `<div><strong>상품명:</strong> ${item.name}</div>`;
+      if (item.product || item.brand || item.price) {
+        html += `<div style="margin-top:10px;">`;
+        if (item.product) {
+          html += `<div><strong>상품명:</strong> ${item.product}</div>`;
         }
         if (item.brand) {
           html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
@@ -150,11 +155,13 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("modal-desc").innerHTML = html;
     overlay.style.display = "block";
     modal.style.display = "block";
+    document.body.classList.add("modal-open");
   }
 
   window.closeModal = function () {
     document.getElementById("event-modal").style.display = "none";
     document.getElementById("modal-overlay").style.display = "none";
+    document.body.classList.remove("modal-open");
   };
 
   document.getElementById("modal-overlay").addEventListener("click", closeModal);
