@@ -133,9 +133,11 @@ document.addEventListener("DOMContentLoaded", function () {
     let html = "";
     html += `<p>${event.extendedProps.description}</p>`;
     event.extendedProps.items.forEach((item) => {
-      html += `<p><strong>상품명:</strong> ${item.product}<br />`;
-      html += `<strong>브랜드:</strong> ${item.brand}<br />`;
-      html += `<strong>가격:</strong> ${item.price}</p>`;
+      descHTML += `<div><strong>상품명:</strong> ${item.name}</div>`;
+      if (item.brand) {
+        descHTML += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
+      }
+      descHTML += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
     });
 
     document.getElementById("modal-desc").innerHTML = html;
