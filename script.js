@@ -1,3 +1,5 @@
+// ✅ 전체 script.js 최신 정리본
+
 document.addEventListener("DOMContentLoaded", function () {
   let calendar;
   let rawEvents = [];
@@ -28,9 +30,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (!calendar) return;
 
-    const filtered =
-      outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
-
+    const filtered = outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
     calendar.removeAllEvents();
     filtered.forEach((event) => calendar.addEvent(event));
   }
@@ -45,13 +45,11 @@ document.addEventListener("DOMContentLoaded", function () {
       if (row.length < 11 || !row[0] || !row[1]) continue;
 
       const [title, period, , , thumbnail, , desc, brand, product, price] = row;
-
       const dates = period.split("~");
       if (dates.length !== 2) continue;
 
-      const start = parseDate(dates[0].trim());
-      const end = parseDate(dates[1].trim());
-
+      const start = parseDate(dates[0]);
+      const end = parseDate(dates[1]);
       if (!start || !end) {
         console.log("❌ 날짜 파싱 제외 대상:", period);
         continue;
@@ -65,8 +63,8 @@ document.addEventListener("DOMContentLoaded", function () {
           end,
           description: desc,
           outlet: outletName,
-          thumbnail: thumbnail || "",
           items: [],
+          thumbnail,
         };
       }
 
@@ -78,12 +76,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function parseDate(str) {
     const clean = str.replace(/\([^)]*\)/g, "").trim();
-    const full = clean.includes(".") ? clean : null;
-    if (!full) return null;
-
-    const parts = full.split(".").map((p) => p.padStart(2, "0"));
+    if (!clean.includes(".")) return null;
+    const parts = clean.split(".").map((p) => p.padStart(2, "0"));
     if (parts.length !== 2) return null;
-
     const [month, day] = parts;
     return `2025-${month}-${day}`;
   }
@@ -107,7 +102,6 @@ document.addEventListener("DOMContentLoaded", function () {
           )
         ).then((results) => {
           rawEvents = results.flat();
-          console.log("📦 최종 이벤트", rawEvents);
           initCalendar(rawEvents);
         });
       });
@@ -116,52 +110,37 @@ document.addEventListener("DOMContentLoaded", function () {
 
   loadAllSheets();
 
-  // 🧩 모달 로직
   function showModal(event) {
     const modal = document.getElementById("event-modal");
     const overlay = document.getElementById("modal-overlay");
 
     document.getElementById("modal-title").innerText = event.title;
 
+    const thumb = event.extendedProps.thumbnail;
+    document.getElementById("modal-thumbnail").src = thumb;
+
     let html = "";
-
-    // 썸네일
-    if (event.extendedProps.thumbnail) {
-      html += `<div style="margin-bottom:10px;"><img src="${event.extendedProps.thumbnail}" style="width:100%; border-radius:8px;" /></div>`;
-    }
-
-    // 혜택 설명
     if (event.extendedProps.description) {
       html += `<p>${event.extendedProps.description}</p>`;
     }
 
-    // 상품 리스트
     event.extendedProps.items.forEach((item) => {
-      if (item.product || item.brand || item.price) {
-        html += `<div style="margin-top:10px;">`;
-        if (item.product) {
-          html += `<div><strong>상품명:</strong> ${item.product}</div>`;
-        }
-        if (item.brand) {
-          html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
-        }
-        if (item.price) {
-          html += `<div><strong>가격:</strong> ${item.price}</div>`;
-        }
-        html += `<hr/></div>`;
-      }
+      if (item.product) html += `<div><strong>상품명:</strong> ${item.product}</div>`;
+      if (item.brand) html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
+      html += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
     });
 
     document.getElementById("modal-desc").innerHTML = html;
+
+    modal.classList.add("show");
     overlay.style.display = "block";
-    modal.style.display = "block";
-    document.body.classList.add("modal-open");
+    document.body.style.overflow = "hidden";
   }
 
   window.closeModal = function () {
-    document.getElementById("event-modal").style.display = "none";
+    document.getElementById("event-modal").classList.remove("show");
     document.getElementById("modal-overlay").style.display = "none";
-    document.body.classList.remove("modal-open");
+    document.body.style.overflow = "auto";
   };
 
   document.getElementById("modal-overlay").addEventListener("click", closeModal);
