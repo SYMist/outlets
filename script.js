@@ -108,9 +108,11 @@ document.addEventListener("DOMContentLoaded", function () {
       gapi.client.init({ apiKey }).then(() => {
         Promise.all(
           sheets.map((s) =>
-            gapi.client.request({
-              path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${s.name}!A2:K`,
-            }).then((response) => parseSheetData(response.result, s.outlet))
+            gapi.client
+              .request({
+                path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${s.name}!A2:K`,
+              })
+              .then((response) => parseSheetData(response.result, s.outlet))
           )
         ).then((results) => {
           rawEvents = results.flat();
@@ -124,26 +126,21 @@ document.addEventListener("DOMContentLoaded", function () {
   loadAllSheets();
 
   // 🧩 모달 로직 추가
-function showModal(event) {
-  const modal = document.getElementById("event-modal");
-  const overlay = document.getElementById("modal-overlay");
+  function showModal(event) {
+    const modal = document.getElementById("event-modal");
+    const overlay = document.getElementById("modal-overlay");
 
-  document.getElementById("modal-title").innerText = event.title;
+    document.getElementById("modal-title").innerText = event.title;
 
-  let html = "";
-  html += `<p>${event.extendedProps.description}</p>`;
-  event.extendedProps.items.forEach((item) => {
-    html += `<div><strong>상품명:</strong> ${item.product}</div>`;
-    if (item.brand) {
-      html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
-    }
-    html += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
-  });
-
-  document.getElementById("modal-desc").innerHTML = html;
-  overlay.style.display = "block";
-  modal.style.display = "block";
-}
+    let html = "";
+    html += `<p>${event.extendedProps.description}</p>`;
+    event.extendedProps.items.forEach((item) => {
+      html += `<div><strong>상품명:</strong> ${item.product}</div>`;
+      if (item.brand) {
+        html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
+      }
+      html += `<div><strong>가격:</strong> ${item.price}</div><hr/>`;
+    });
 
     document.getElementById("modal-desc").innerHTML = html;
     overlay.style.display = "block";
