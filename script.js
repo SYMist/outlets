@@ -48,7 +48,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const start = parseDate(dates[0]);
       const end = parseDate(dates[1]);
-      if (!start || !end) continue;
+      if (!start || !end) {
+        console.log("❌ 날짜 파싱 제외 대상:", period);
+        continue;
+      }
 
       const key = `${title}_${start}_${end}`;
       if (!grouped[key]) {
@@ -109,13 +112,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const modal = document.getElementById("event-modal");
     const overlay = document.getElementById("modal-overlay");
 
-    modal.style.display = "block";
-    overlay.style.display = "block";
-    modal.classList.add("show");
-    document.body.style.overflow = "hidden";
-
     document.getElementById("modal-title").innerText = event.title;
-    document.getElementById("modal-thumbnail").src = event.extendedProps.thumbnail;
+
+    const thumb = event.extendedProps.thumbnail;
+    document.getElementById("modal-thumbnail").src = thumb;
 
     let html = "";
     if (event.extendedProps.description) {
@@ -123,19 +123,24 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     event.extendedProps.items.forEach((item) => {
+      const hasAnyDetail = item.product || item.brand || item.price;
+      if (!hasAnyDetail) return;
+
       if (item.product) html += `<div><strong>상품명:</strong> ${item.product}</div>`;
       if (item.brand) html += `<div><strong>브랜드:</strong> ${item.brand}</div>`;
       if (item.price) html += `<div><strong>가격:</strong> ${item.price}</div>`;
-      html += `<hr/>`;
+      if (hasAnyDetail) html += `<hr/>`;
     });
 
     document.getElementById("modal-desc").innerHTML = html;
+
+    modal.classList.add("show");
+    overlay.style.display = "block";
+    document.body.style.overflow = "hidden";
   }
 
   window.closeModal = function () {
-    const modal = document.getElementById("event-modal");
-    modal.classList.remove("show");
-    modal.style.display = "none";
+    document.getElementById("event-modal").classList.remove("show");
     document.getElementById("modal-overlay").style.display = "none";
     document.body.style.overflow = "auto";
   };
