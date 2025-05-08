@@ -1,14 +1,10 @@
 document.addEventListener("DOMContentLoaded", function () {
   let calendar;
-  let allRawEvents = [];
-  const calendarEl = document.getElementById("calendar");
-  const sheetMap = [
-    { sheet: "Sheet1", outlet: "송도" },
-    { sheet: "Sheet2", outlet: "김포" },
-    { sheet: "Sheet3", outlet: "스페이스원" },
-  ];
+  let rawEvents = [];
+  let filteredOutlet = "ALL";
 
   function initCalendar(events) {
+    const calendarEl = document.getElementById("calendar");
     calendar = new FullCalendar.Calendar(calendarEl, {
       initialView: "dayGridMonth",
       locale: "ko",
@@ -19,55 +15,21 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       events: events,
       eventClick: function (info) {
-        const event = info.event;
-        const items = event.extendedProps.items || [];
-        const content = `
-          <strong>${event.title}</strong><br><br>
-          <div>${event.extendedProps.description || ""}</div>
-          <br>
-          ${items
-            .map(
-              (item) => `
-                <div style="margin-bottom:10px">
-                  <div>상품명: ${item.name}</div>
-                  <div>브랜드: ${item.brand}</div>
-                  <div>가격: ${item.price}</div>
-                </div>
-              `
-            )
-            .join("")}
-        `;
-
-        const modal = document.createElement("div");
-        modal.style.position = "fixed";
-        modal.style.top = "0";
-        modal.style.left = "0";
-        modal.style.width = "100vw";
-        modal.style.height = "100vh";
-        modal.style.background = "rgba(0,0,0,0.5)";
-        modal.style.display = "flex";
-        modal.style.alignItems = "center";
-        modal.style.justifyContent = "center";
-        modal.innerHTML = `
-          <div style="background:white; padding:20px; max-width:500px; max-height:80vh; overflow:auto; border-radius:8px">
-            ${content}
-            <div style="text-align:right; margin-top:20px">
-              <button onclick="this.closest('div').parentElement.remove()">닫기</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modal);
+        showModal(info.event);
       },
     });
     calendar.render();
   }
 
   function filterEvents(outlet) {
+    filteredOutlet = outlet;
     document.querySelectorAll(".filter-btn").forEach((btn) => btn.classList.remove("active"));
     event.target.classList.add("active");
 
+    if (!calendar) return;
+
     const filtered =
-      outlet === "ALL" ? allRawEvents : allRawEvents.filter((e) => e.outlet === outlet);
+      outlet === "ALL" ? rawEvents : rawEvents.filter((e) => e.outlet === outlet);
 
     calendar.removeAllEvents();
     filtered.forEach((event) => calendar.addEvent(event));
@@ -75,75 +37,116 @@ document.addEventListener("DOMContentLoaded", function () {
 
   window.filterEvents = filterEvents;
 
-  function parsePeriodString(period) {
-    const match = period.match(/(\d{1,2})\.(\d{1,2})\(.*?\)\s*~\s*(\d{1,2})\.(\d{1,2})\(.*?\)/);
-    if (!match) return null;
-    const [_, sM, sD, eM, eD] = match;
-    const year = "2025";
-    return {
-      start: `${year}-${sM.padStart(2, "0")}-${sD.padStart(2, "0")}`,
-      end: `${year}-${eM.padStart(2, "0")}-${eD.padStart(2, "0")}`,
-    };
-  }
-
   function parseSheetData(data, outletName) {
     const rows = data.values.slice(1); // skip header
-    const grouped = new Map();
+
+    const grouped = {};
 
     for (const row of rows) {
-      if (row.length < 11) continue;
-      const key = row[0] + row[1] + outletName;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key).push(row);
-    }
+      if (row.length < 11 || !row[0] || !row[1]) continue;
 
-    const events = [];
-    for (const group of grouped.values()) {
-      const [title, period, , , , , desc] = group[0];
-      const date = parsePeriodString(period);
-      if (!date) {
-        console.warn("날짜 파싱 제외 대상:", period);
+      const title = row[0];
+      const period = row[1];
+      const desc = row[6] || "";
+      const brand = row[7] || "";
+      const product = row[8] || "";
+      const price = row[9] || "";
+
+      const dates = period.split("~");
+      if (dates.length !== 2) continue;
+      const startRaw = dates[0].trim();
+      const endRaw = dates[1].trim();
+
+      const start = parseDate(startRaw);
+      const end = parseDate(endRaw);
+
+      if (!start || !end) {
+        console.log("❌ 날짜 파싱 제외 대상:", period);
         continue;
       }
 
-      const items = group.map((r) => ({
-        brand: r[7] || "",
-        name: r[8] || "",
-        price: r[9] || "",
-      }));
+      const key = `${title}_${start}_${end}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          title: `[${outletName}] ${title}`,
+          start,
+          end,
+          description: desc,
+          outlet: outletName,
+          items: [],
+        };
+      }
 
-      events.push({
-        title,
-        start: date.start,
-        end: date.end,
-        description: desc,
-        items,
-        outlet: outletName,
-      });
+      grouped[key].items.push({ brand, product, price });
     }
-    return events;
+
+    return Object.values(grouped);
+  }
+
+  function parseDate(str) {
+    const clean = str.replace(/\([^)]*\)/g, "").trim();
+    const full = clean.includes(".") ? clean : null;
+    if (!full) return null;
+
+    const parts = full.split(".").map((p) => p.padStart(2, "0"));
+    if (parts.length !== 2) return null;
+
+    const [month, day] = parts;
+    return `2025-${month}-${day}`;
   }
 
   function loadAllSheets() {
     const sheetId = "16JLl5-GVDSSQsdMowjZkTAzOmi6qkkz93to_GxMjQ18";
     const apiKey = "AIzaSyCmZFh6Hm6CU4ucKnRU78v6M3Y8YC_rTw8";
+    const sheets = [
+      { name: "Sheet1", outlet: "송도" },
+      { name: "Sheet2", outlet: "김포" },
+      { name: "Sheet3", outlet: "스페이스원" },
+    ];
 
     gapi.load("client", () => {
       gapi.client.init({ apiKey }).then(() => {
-        const promises = sheetMap.map(({ sheet, outlet }) => {
-          return gapi.client.request({
-            path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheet}!A2:K`,
-          }).then((res) => parseSheetData(res.result, outlet));
-        });
-
-        Promise.all(promises).then((allData) => {
-          allRawEvents = allData.flat();
-          console.log("📦 최종 이벤트", allRawEvents);
-          initCalendar(allRawEvents);
+        Promise.all(
+          sheets.map((s) =>
+            gapi.client.request({
+              path: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${s.name}!A2:K`,
+            }).then((response) => parseSheetData(response.result, s.outlet))
+          )
+        ).then((results) => {
+          rawEvents = results.flat();
+          console.log("📦 최종 이벤트", rawEvents);
+          initCalendar(rawEvents);
         });
       });
     });
   }
 
   loadAllSheets();
+
+  // 🧩 모달 로직 추가
+  function showModal(event) {
+    const modal = document.getElementById("event-modal");
+    const overlay = document.getElementById("modal-overlay");
+
+    document.getElementById("modal-title").innerText = event.title;
+
+    let html = "";
+    html += `<p>${event.extendedProps.description}</p>`;
+    event.extendedProps.items.forEach((item) => {
+      html += `<p><strong>상품명:</strong> ${item.product}<br />`;
+      html += `<strong>브랜드:</strong> ${item.brand}<br />`;
+      html += `<strong>가격:</strong> ${item.price}</p>`;
+    });
+
+    document.getElementById("modal-desc").innerHTML = html;
+    overlay.style.display = "block";
+    modal.style.display = "block";
+  }
+
+  window.closeModal = function () {
+    document.getElementById("event-modal").style.display = "none";
+    document.getElementById("modal-overlay").style.display = "none";
+  };
+
+  document.getElementById("modal-overlay").addEventListener("click", closeModal);
 });
