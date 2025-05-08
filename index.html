@@ -19,19 +19,20 @@
   <h1 style="text-align:center">아울렛 할인 캘린더</h1>
 
   <div class="filter-bar">
-    <button class="filter-btn active" onclick="filterEvents('ALL', event)">전체</button>
-    <button class="filter-btn" onclick="filterEvents('송도', event)">송도</button>
-    <button class="filter-btn" onclick="filterEvents('김포', event)">김포</button>
-    <button class="filter-btn" onclick="filterEvents('스페이스원', event)">스페이스원</button>
+    <button class="filter-btn active" onclick="filterEvents('ALL')">전체</button>
+    <button class="filter-btn" onclick="filterEvents('송도')">송도</button>
+    <button class="filter-btn" onclick="filterEvents('김포')">김포</button>
+    <button class="filter-btn" onclick="filterEvents('스페이스원')">스페이스원</button>
   </div>
 
   <div id="calendar"></div>
 
-  <div id="modal-overlay"></div>
-  <div id="event-modal">
-    <h3 id="modal-title"></h3>
+  <!-- ✅ 모달 오버레이 및 본체 -->
+  <div id="modal-overlay" style="display:none;"></div>
+  <div id="event-modal" style="display:none;">
+    <h2 id="modal-title"></h2>
     <div id="modal-desc"></div>
-    <button onclick="closeModal()">닫기</button>
+    <button onclick="closeModal()" class="modal-close-btn">닫기</button>
   </div>
 
   <!-- ✅ 사용자 정의 JS -->
