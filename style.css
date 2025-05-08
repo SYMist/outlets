@@ -117,3 +117,12 @@ h1 {
   border-radius: 4px;
   cursor: pointer;
 }
+
+body.modal-open {
+  overflow: hidden;
+}
+
+#event-modal {
+  max-height: 80vh;
+  overflow-y: auto;
+}
