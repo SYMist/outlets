@@ -1,3 +1,4 @@
+
 import time
 import gspread
 import os
@@ -12,10 +13,13 @@ from selenium.webdriver.support import expected_conditions as EC
 # --- WebDriver 설정
 def setup_driver():
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--remote-debugging-port=9222")
     driver = webdriver.Chrome(options=options)
     return driver
 
@@ -37,20 +41,33 @@ def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
 
+    # getContents 함수 로딩까지 대기
     try:
-        # getContents 함수가 정의될 때까지 대기
-        WebDriverWait(driver, 20).until(
+        WebDriverWait(driver, 10).until(
             lambda d: d.execute_script("return typeof getContents === 'function'")
         )
-        driver.execute_script(f"getContents('01', {page}, 0);")
-        time.sleep(3)
-
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        return soup.select("#eventList > li")
-
     except Exception as e:
         print(f"❌ getContents 함수 미정의 (branchCd: {branchCd}, page: {page})")
         return []
+
+    try:
+        driver.execute_script(f"getContents('01', {page}, 0);")
+        time.sleep(3)
+    except Exception as e:
+        print(f"❌ getContents 실행 오류: {e}")
+        return []
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+
+    # 콘솔 로그 출력 (디버깅용)
+    try:
+        logs = driver.get_log("browser")
+        for entry in logs:
+            print("📜 콘솔 로그:", entry)
+    except:
+        pass
+
+    return soup.select("#eventList > li")
 
 # --- 행사 상세페이지 크롤링
 def fetch_event_detail(driver, url):
