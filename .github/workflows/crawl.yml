@@ -1,0 +1,32 @@
+name: Run Outlet Crawler
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 매일 00:00 UTC (한국시간 9AM)
+  workflow_dispatch:     # 수동 실행도 가능
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install gspread oauth2client selenium beautifulsoup4
+          sudo apt-get update
+          sudo apt-get install -y chromium-chromedriver
+          sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
+
+      - name: Run crawler
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
+          python outlet.py
