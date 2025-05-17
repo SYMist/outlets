@@ -15,7 +15,6 @@ def setup_driver():
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     driver = webdriver.Chrome(options=options)
     return driver
@@ -39,7 +38,8 @@ def fetch_event_list(driver, branchCd, page):
     driver.get(list_url)
 
     try:
-        WebDriverWait(driver, 10).until(
+        # getContents 함수가 정의될 때까지 대기
+        WebDriverWait(driver, 20).until(
             lambda d: d.execute_script("return typeof getContents === 'function'")
         )
         driver.execute_script(f"getContents('01', {page}, 0);")
@@ -99,8 +99,10 @@ def fetch_event_detail(driver, url):
 # --- Google Sheets에 업로드
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
+
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(sheet_title)
