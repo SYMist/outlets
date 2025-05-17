@@ -2,7 +2,7 @@ name: Run Outlet Crawler
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 00:00 UTC = 오전 9시 KST
+    - cron: '0 0 * * *'  # 매일 00:00 UTC = 한국 9AM
   workflow_dispatch:
 
 jobs:
@@ -20,23 +20,22 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip curl gnupg
-          
-          # Google Chrome 설치
-          curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-keyring.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
-          # ChromeDriver 설치 (114 고정)
-          curl -sS -o chromedriver.zip https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
-          unzip chromedriver.zip
-          sudo mv chromedriver /usr/bin/chromedriver
-          sudo chmod +x /usr/bin/chromedriver
-
-          # Python dependencies
           pip install gspread oauth2client selenium beautifulsoup4
+          sudo apt-get update
+          sudo apt-get install -y unzip wget curl
+
+      - name: Install matching Chrome & ChromeDriver
+        run: |
+          # Get Chrome version
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          echo "✅ Detected Chrome version: $CHROME_VERSION"
+
+          # Download matching ChromeDriver
+          DRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip"
+          wget -O chromedriver.zip $DRIVER_URL
+          unzip chromedriver.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
+          sudo chmod +x /usr/bin/chromedriver
 
       - name: Run crawler
         env:
