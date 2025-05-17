@@ -9,20 +9,18 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# --- WebDriver 설정 (headless 포함)
+# --- WebDriver 설정 (headless + 안정화 옵션 포함)
 def setup_driver():
     options = Options()
-    options.add_argument("--headless=new")  # 최신 Headless 모드
+    options.add_argument("--headless")  # ✅ headless 모드
+    options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--remote-debugging-port=9222")
     driver = webdriver.Chrome(options=options)
     return driver
 
-# --- 가격 텍스트 처리 (strikethrough 추가)
+# --- 가격 텍스트 처리
 def process_price_text(price_text):
     if "정상가" in price_text and "판매가" in price_text:
         try:
@@ -39,9 +37,21 @@ def process_price_text(price_text):
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
-    time.sleep(2)
-    driver.execute_script(f"getContents('01', {page}, 0);")
-    time.sleep(3)
+    time.sleep(3)  # ✅ 페이지 JS 로딩 시간 확보
+
+    # getContents 함수가 정의되었는지 확인
+    has_function = driver.execute_script("return typeof getContents === 'function';")
+    if not has_function:
+        print(f"❌ getContents 함수 미정의 (branchCd: {branchCd}, page: {page})")
+        return []
+
+    try:
+        driver.execute_script(f"getContents('01', {page}, 0);")
+        time.sleep(3)  # ✅ 데이터 로딩 대기
+    except Exception as e:
+        print(f"⚠️ getContents 실행 실패: {e}")
+        return []
+
     soup = BeautifulSoup(driver.page_source, "html.parser")
     return soup.select("#eventList > li")
 
@@ -68,7 +78,9 @@ def fetch_event_detail(driver, url):
             name = p.select_one(".p_productNm")
             price = p.select_one(".p_productPrc")
             img = p.select_one(".p_productImg")
+
             price_text = price.get_text(" ", strip=True) if price else ""
+
             products.append({
                 "브랜드": brand.text.strip() if brand else "",
                 "제품명": name.text.strip() if name else "",
@@ -87,11 +99,12 @@ def fetch_event_detail(driver, url):
         print(f"❌ 상세페이지 크롤링 실패: {e}")
         return {"상세 제목": "", "상세 기간": "", "텍스트 설명": [], "상품 리스트": []}
 
-# --- Google Sheets에 업로드
+# --- Google Sheets 업로드
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
+
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(sheet_title)
@@ -101,7 +114,8 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
-    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지"]
+    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크",
+               "혜택 설명", "브랜드", "제품명", "가격", "이미지"]
 
     try:
         existing_data = worksheet.get_all_values()
@@ -111,9 +125,11 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         existing_data = []
 
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
+
     filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
     print(f"✨ [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
+
     if not filtered_new_rows:
         print(f"✅ [{sheet_name}] 추가할 데이터 없음.")
         return
@@ -121,10 +137,11 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     all_data = [headers] + filtered_new_rows + existing_data
     worksheet.clear()
     worksheet.update('A1', all_data)
-    print(f"✅ [{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
+
+    print(f"✅ [{sheet_name}] 총 {len(all_data) - 1}개 데이터 저장 완료.")
     print(f"🔗 시트 링크: https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit")
 
-# --- 아울렛 하나 크롤링
+# --- 개별 아울렛 크롤링
 def crawl_outlet(branchCd, sheet_name):
     driver = setup_driver()
     new_rows = []
@@ -173,10 +190,11 @@ def main():
         ("B00172000", "Sheet2"),  # 김포
         ("B00178000", "Sheet3"),  # 스페이스원
     ]
+
     for branchCd, sheet_name in OUTLET_TARGETS:
         crawl_outlet(branchCd, sheet_name)
+
     print("\n🎉 전체 아울렛 크롤링 및 저장 완료!")
 
-# --- 실행
 if __name__ == "__main__":
     main()
