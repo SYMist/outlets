@@ -15,6 +15,7 @@ def setup_driver():
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     driver = webdriver.Chrome(options=options)
     return driver
@@ -32,30 +33,24 @@ def process_price_text(price_text):
     else:
         return price_text
 
-# --- 행사 리스트 페이지 크롤링 개선
+# --- 행사 리스트 페이지 크롤링
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
-    time.sleep(2)
-
-    # ✅ getContents 함수 로딩 대기
-    for _ in range(10):
-        if driver.execute_script("return typeof getContents === 'function';"):
-            break
-        time.sleep(0.5)
-    else:
-        print(f"❌ getContents 함수 미정의 (branchCd: {branchCd}, page: {page})")
-        return []
 
     try:
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script("return typeof getContents === 'function'")
+        )
         driver.execute_script(f"getContents('01', {page}, 0);")
         time.sleep(3)
-    except Exception as e:
-        print(f"⚠️ getContents 실행 실패: {e}")
-        return []
 
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    return soup.select("#eventList > li")
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        return soup.select("#eventList > li")
+
+    except Exception as e:
+        print(f"❌ getContents 함수 미정의 (branchCd: {branchCd}, page: {page})")
+        return []
 
 # --- 행사 상세페이지 크롤링
 def fetch_event_detail(driver, url):
@@ -104,10 +99,8 @@ def fetch_event_detail(driver, url):
 # --- Google Sheets에 업로드
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
-
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(sheet_title)
