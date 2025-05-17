@@ -1,4 +1,3 @@
-
 import time
 import gspread
 import os
@@ -13,13 +12,12 @@ from selenium.webdriver.support import expected_conditions as EC
 # --- WebDriver 설정
 def setup_driver():
     options = Options()
-    options.add_argument("--headless=new")
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--remote-debugging-port=9222")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
     driver = webdriver.Chrome(options=options)
     return driver
 
@@ -36,37 +34,29 @@ def process_price_text(price_text):
     else:
         return price_text
 
+# --- getContents 함수 로딩 대기
+def wait_for_getContents(driver, timeout=10):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return typeof getContents === 'function'")
+        )
+        return True
+    except Exception:
+        return False
+
 # --- 행사 리스트 페이지 크롤링
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
 
-    # getContents 함수 로딩까지 대기
-    try:
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return typeof getContents === 'function'")
-        )
-    except Exception as e:
+    if not wait_for_getContents(driver):
         print(f"❌ getContents 함수 미정의 (branchCd: {branchCd}, page: {page})")
         return []
 
-    try:
-        driver.execute_script(f"getContents('01', {page}, 0);")
-        time.sleep(3)
-    except Exception as e:
-        print(f"❌ getContents 실행 오류: {e}")
-        return []
+    driver.execute_script(f"getContents('01', {page}, 0);")
+    time.sleep(3)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
-
-    # 콘솔 로그 출력 (디버깅용)
-    try:
-        logs = driver.get_log("browser")
-        for entry in logs:
-            print("📜 콘솔 로그:", entry)
-    except:
-        pass
-
     return soup.select("#eventList > li")
 
 # --- 행사 상세페이지 크롤링
@@ -139,6 +129,7 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         existing_data = []
 
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
+
     filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
     print(f"✨ [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
