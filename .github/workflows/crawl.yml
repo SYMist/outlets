@@ -2,12 +2,13 @@ name: Run Outlet Crawler
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 00:00 UTC (한국시간 9AM)
-  workflow_dispatch:     # 수동 실행도 가능
+    - cron: '0 0 * * *'  # 매일 00:00 UTC = 오전 9시 KST
+  workflow_dispatch:      # 수동 실행도 가능
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -21,12 +22,20 @@ jobs:
         run: |
           pip install gspread oauth2client selenium beautifulsoup4
           sudo apt-get update
-          sudo apt-get install -y chromium-chromedriver
-          sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
+          sudo apt-get install -y wget unzip xvfb libxi6 libgconf-2-4
+
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+
+          CHROME_VERSION=$(google-chrome --version | grep -oP "\d+\.\d+\.\d+\.\d+")
+          wget https://chromedriver.storage.googleapis.com/${CHROME_VERSION%%.*}/chromedriver_linux64.zip || wget https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/bin/chromedriver
+          sudo chmod +x /usr/bin/chromedriver
 
       - name: Run crawler
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_SERVICE_KEY }}
         run: |
           echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
-          python outlet.py
+          python outlet_crawler.py
