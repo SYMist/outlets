@@ -26,7 +26,7 @@ jobs:
 
       - name: Run crawler
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_SERVICE_KEY }}
         run: |
           echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
           python outlet.py
