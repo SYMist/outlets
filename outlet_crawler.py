@@ -12,11 +12,13 @@ from selenium.webdriver.support import expected_conditions as EC
 # --- WebDriver 설정
 def setup_driver():
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    return webdriver.Chrome(options=options)
+    options.add_argument("--disable-gpu")
+    driver = webdriver.Chrome(options=options)
+    return driver
 
 # --- 가격 텍스트 처리
 def process_price_text(price_text):
@@ -28,27 +30,32 @@ def process_price_text(price_text):
             return f"<s>{original_price}</s> 판매가 {sale_price}"
         except:
             return price_text
-    return price_text
+    else:
+        return price_text
 
-# --- 행사 리스트 크롤링
+# --- 행사 리스트 페이지 크롤링
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
+    time.sleep(3)
 
     try:
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return typeof getContents !== 'undefined'")
-        )
-        driver.execute_script(f"getContents('01', {page}, 0);")
-        time.sleep(3)
+        # 페이지 번호 클릭 (1-based index)
+        page_btns = driver.find_elements(By.CSS_SELECTOR, "#paging > a")
+        if page <= len(page_btns):
+            page_btns[page - 1].click()
+            time.sleep(2)
+        else:
+            print(f"⚠ 페이지 {page} 없음. 스킵.")
+            return []
     except Exception as e:
-        print(f"❌ getContents 실행 실패 또는 정의되지 않음: {e}")
+        print(f"❌ 페이지 버튼 클릭 실패: {e}")
         return []
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
     return soup.select("#eventList > li")
 
-# --- 상세페이지 크롤링
+# --- 행사 상세페이지 크롤링
 def fetch_event_detail(driver, url):
     try:
         driver.get(url)
@@ -58,19 +65,21 @@ def fetch_event_detail(driver, url):
         title = soup.select_one("section.fixArea h2")
         period = soup.select_one("table.info td")
 
+        noimg_block = soup.select("article.noImgProduct tr")
         noimg_list = [
             f"{row.find('th').text.strip()}: {row.find('td').text.strip()}"
-            for row in soup.select("article.noImgProduct tr")
-            if row.find("th") and row.find("td")
+            for row in noimg_block if row.find('th') and row.find('td')
         ]
 
+        product_blocks = soup.select("article.twoProduct figure")
         products = []
-        for p in soup.select("article.twoProduct figure"):
+        for p in product_blocks:
             brand = p.select_one(".p_brandNm")
             name = p.select_one(".p_productNm")
             price = p.select_one(".p_productPrc")
             img = p.select_one(".p_productImg")
             price_text = price.get_text(" ", strip=True) if price else ""
+
             products.append({
                 "브랜드": brand.text.strip() if brand else "",
                 "제품명": name.text.strip() if name else "",
@@ -92,7 +101,9 @@ def fetch_event_detail(driver, url):
 # --- Google Sheets에 업로드
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    CREDENTIAL_PATH = os.path.join(os.path.dirname(__file__), "credentials.json")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
+
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(sheet_title)
@@ -103,7 +114,14 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
     headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지"]
-    existing_data = worksheet.get_all_values()[1:] if worksheet.get_all_values() else []
+
+    try:
+        existing_data = worksheet.get_all_values()
+        if existing_data and existing_data[0] == headers:
+            existing_data = existing_data[1:]
+    except:
+        existing_data = []
+
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
     filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
@@ -114,10 +132,12 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
 
     all_data = [headers] + filtered_new_rows + existing_data
     worksheet.clear()
-    worksheet.update("A1", all_data)
-    print(f"✅ [{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
+    worksheet.update('A1', all_data)
 
-# --- 아울렛 전체 크롤링
+    print(f"✅ [{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
+    print(f"🔗 시트 링크: https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit")
+
+# --- 아울렛 하나 크롤링
 def crawl_outlet(branchCd, sheet_name):
     driver = setup_driver()
     new_rows = []
@@ -125,19 +145,32 @@ def crawl_outlet(branchCd, sheet_name):
     for page in range(1, 5):
         print(f"📄 [{sheet_name}] 페이지 {page} 크롤링 중...")
         events = fetch_event_list(driver, branchCd, page)
+        if not events:
+            print(f"⚠ 페이지 {page} 이벤트 없음")
+            continue
+
         for event in events:
             title_tag = event.select_one(".info_tit")
             period_tag = event.select_one(".info_txt")
             img_tag = event.select_one("img")
             link_tag = event.select_one("a")
 
-            title = title_tag.get_text(" ", strip=True) if title_tag else ""
+            title = title_tag.get_text(separator=" ", strip=True) if title_tag else ""
             period = period_tag.get_text(strip=True) if period_tag else ""
             image_url = img_tag["src"] if img_tag else ""
             detail_url = "https://www.ehyundai.com" + link_tag["href"] if link_tag else ""
 
             detail = fetch_event_detail(driver, detail_url)
-            base_info = [title, period, detail["상세 제목"], detail["상세 기간"], image_url, detail_url, " / ".join(detail["텍스트 설명"])]
+
+            base_info = [
+                title,
+                period,
+                detail["상세 제목"],
+                detail["상세 기간"],
+                image_url,
+                detail_url,
+                " / ".join(detail["텍스트 설명"]),
+            ]
 
             if detail["상품 리스트"]:
                 for p in detail["상품 리스트"]:
@@ -149,15 +182,17 @@ def crawl_outlet(branchCd, sheet_name):
     driver.quit()
     upload_to_google_sheet("outlet-data", sheet_name, new_rows)
 
-# --- 실행
+# --- 메인 실행
 def main():
     OUTLET_TARGETS = [
         ("B00174000", "Sheet1"),  # 송도
         ("B00172000", "Sheet2"),  # 김포
         ("B00178000", "Sheet3"),  # 스페이스원
     ]
+
     for branchCd, sheet_name in OUTLET_TARGETS:
         crawl_outlet(branchCd, sheet_name)
+
     print("\n🎉 전체 아울렛 크롤링 및 저장 완료!")
 
 if __name__ == "__main__":
