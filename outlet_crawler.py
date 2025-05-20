@@ -1,6 +1,7 @@
 import time
 import gspread
 import os
+from datetime import datetime
 from bs4 import BeautifulSoup
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium import webdriver
@@ -12,15 +13,15 @@ from selenium.webdriver.support import expected_conditions as EC
 # --- WebDriver 설정
 def setup_driver():
     options = Options()
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--headless=new")
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
     driver = webdriver.Chrome(options=options)
     return driver
 
-# --- 가격 텍스트 처리
+# --- 가격 텍스트 처리 (strikethrough 추가)
 def process_price_text(price_text):
     if "정상가" in price_text and "판매가" in price_text:
         try:
@@ -37,19 +38,13 @@ def process_price_text(price_text):
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
-    time.sleep(3)
+    time.sleep(2)
 
     try:
-        # 페이지 번호 클릭 (1-based index)
-        page_btns = driver.find_elements(By.CSS_SELECTOR, "#paging > a")
-        if page <= len(page_btns):
-            page_btns[page - 1].click()
-            time.sleep(2)
-        else:
-            print(f"⚠ 페이지 {page} 없음. 스킵.")
-            return []
+        driver.execute_script(f"getContents('01', {page}, 0);")
+        time.sleep(3)
     except Exception as e:
-        print(f"❌ 페이지 버튼 클릭 실패: {e}")
+        print(f"❌ getContents 실행 실패 또는 정의되지 않음: {e}")
         return []
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -78,6 +73,7 @@ def fetch_event_detail(driver, url):
             name = p.select_one(".p_productNm")
             price = p.select_one(".p_productPrc")
             img = p.select_one(".p_productImg")
+
             price_text = price.get_text(" ", strip=True) if price else ""
 
             products.append({
@@ -113,7 +109,10 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
-    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지"]
+    headers = [
+        "제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크",
+        "혜택 설명", "브랜드", "제품명", "가격", "이미지", "업데이트 날짜"
+    ]
 
     try:
         existing_data = worksheet.get_all_values()
@@ -123,9 +122,15 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         existing_data = []
 
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
-    filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    filtered_new_rows = [
+        row + [today] for row in new_rows
+        if len(row) >= 6 and row[5] not in existing_links
+    ]
 
     print(f"✨ [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
+
     if not filtered_new_rows:
         print(f"✅ [{sheet_name}] 추가할 데이터 없음.")
         return
@@ -145,8 +150,9 @@ def crawl_outlet(branchCd, sheet_name):
     for page in range(1, 5):
         print(f"📄 [{sheet_name}] 페이지 {page} 크롤링 중...")
         events = fetch_event_list(driver, branchCd, page)
+
         if not events:
-            print(f"⚠ 페이지 {page} 이벤트 없음")
+            print(f"⚠ 페이지 {page} 없음. 스킵.")
             continue
 
         for event in events:
@@ -163,12 +169,9 @@ def crawl_outlet(branchCd, sheet_name):
             detail = fetch_event_detail(driver, detail_url)
 
             base_info = [
-                title,
-                period,
-                detail["상세 제목"],
-                detail["상세 기간"],
-                image_url,
-                detail_url,
+                title, period,
+                detail["상세 제목"], detail["상세 기간"],
+                image_url, detail_url,
                 " / ".join(detail["텍스트 설명"]),
             ]
 
