@@ -8,6 +8,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from datetime import datetime
 
 # --- WebDriver 설정
 def setup_driver():
@@ -17,8 +18,7 @@ def setup_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    driver = webdriver.Chrome(options=options)
-    return driver
+    return webdriver.Chrome(options=options)
 
 # --- 가격 텍스트 처리
 def process_price_text(price_text):
@@ -39,31 +39,27 @@ def fetch_event_list(driver, branchCd, page):
     driver.get(list_url)
 
     try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "#eventList"))
+        page_btns = WebDriverWait(driver, 5).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#paging > a"))
         )
-        page_btns = driver.find_elements(By.CSS_SELECTOR, "#paging > a")
         if page <= len(page_btns):
-            driver.execute_script("arguments[0].click();", page_btns[page - 1])
-            time.sleep(3)
+            page_btns[page - 1].click()
+            time.sleep(2)
         else:
             print(f"⚠ 페이지 {page} 없음. 스킵.")
             return []
-
-        # 디버그용 HTML 저장
-        page_html = driver.page_source
-        with open(f"debug_page_{page}.html", "w", encoding="utf-8") as f:
-            f.write(page_html)
-        print(f"🕵 저장된 HTML: debug_page_{page}.html")
-
-        soup = BeautifulSoup(page_html, "html.parser")
-        events = soup.select("#eventList > li")
-        if not events:
-            print(f"⚠ 페이지 {page} 이벤트 없음")
-        return events
-
     except Exception as e:
-        print(f"❌ 이벤트 리스트 로딩 실패: {e}")
+        print(f"❌ 페이지 버튼 클릭 실패: {e}")
+        return []
+
+    try:
+        WebDriverWait(driver, 7).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "#eventList > li"))
+        )
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        return soup.select("#eventList > li")
+    except Exception as e:
+        print(f"❌ 이벤트 리스트 로딩 실패 (#{page}): {e}")
         return []
 
 # --- 행사 상세페이지 크롤링
@@ -124,7 +120,7 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
-    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지"]
+    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지", "업데이트 날짜"]
 
     try:
         existing_data = worksheet.get_all_values()
@@ -134,7 +130,8 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         existing_data = []
 
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
-    filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
+    today = datetime.today().strftime("%Y-%m-%d")
+    filtered_new_rows = [row + [today] for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
     print(f"✨ [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
     if not filtered_new_rows:
