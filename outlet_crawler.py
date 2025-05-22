@@ -18,11 +18,12 @@ def setup_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    return webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(options=options)
+    return driver
 
 # --- 가격 텍스트 처리
 def process_price_text(price_text):
-    if "정상가" in price_text and "판매가" in price_text:
+    if "경상가" in price_text and "판매가" in price_text:
         try:
             parts = price_text.split("판매가")
             original_price = parts[0].strip()
@@ -37,30 +38,23 @@ def process_price_text(price_text):
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
+    time.sleep(3)
 
     try:
-        page_btns = WebDriverWait(driver, 5).until(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#paging > a"))
-        )
+        WebDriverWait(driver, 5).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "#paging > a")))
+        page_btns = driver.find_elements(By.CSS_SELECTOR, "#paging > a")
         if page <= len(page_btns):
             page_btns[page - 1].click()
             time.sleep(2)
         else:
-            print(f"⚠ 페이지 {page} 없음. 스킵.")
+            print(f"⚠ 페이지 {page} 없음. 스키프.")
             return []
     except Exception as e:
         print(f"❌ 페이지 버튼 클릭 실패: {e}")
         return []
 
-    try:
-        WebDriverWait(driver, 7).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "#eventList > li"))
-        )
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        return soup.select("#eventList > li")
-    except Exception as e:
-        print(f"❌ 이벤트 리스트 로딩 실패 (#{page}): {e}")
-        return []
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    return soup.select("#eventList > li")
 
 # --- 행사 상세페이지 크롤링
 def fetch_event_detail(driver, url):
@@ -105,7 +99,7 @@ def fetch_event_detail(driver, url):
         print(f"❌ 상세페이지 크롤링 실패: {e}")
         return {"상세 제목": "", "상세 기간": "", "텍스트 설명": [], "상품 리스트": []}
 
-# --- Google Sheets에 업로드
+# --- Google Sheets에 업데이트
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -131,27 +125,29 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
 
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
     today = datetime.today().strftime("%Y-%m-%d")
-    filtered_new_rows = [row + [today] for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
-    print(f"✨ [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
+    filtered_new_rows = [
+        row + [today] for row in new_rows if len(row) >= 6 and row[5] not in existing_links
+    ]
+
+    print(f"\u2728 [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
     if not filtered_new_rows:
-        print(f"✅ [{sheet_name}] 추가할 데이터 없음.")
+        print(f"\u2705 [{sheet_name}] 추가할 데이터 없음.")
         return
 
     all_data = [headers] + filtered_new_rows + existing_data
     worksheet.clear()
     worksheet.update('A1', all_data)
+    print(f"\u2705 [{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
+    print(f"\ud83d\udd17 시트 링크: https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit")
 
-    print(f"✅ [{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
-    print(f"🔗 시트 링크: https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit")
-
-# --- 아울렛 하나 크롤링
+# --- 아울레이트 하나 크롤링
 def crawl_outlet(branchCd, sheet_name):
     driver = setup_driver()
     new_rows = []
 
     for page in range(1, 5):
-        print(f"📄 [{sheet_name}] 페이지 {page} 크롤링 중...")
+        print(f"\ud83d\udcc4 [{sheet_name}] 페이지 {page} 크롤링 중...")
         events = fetch_event_list(driver, branchCd, page)
         if not events:
             print(f"⚠ 페이지 {page} 이벤트 없음")
@@ -201,7 +197,7 @@ def main():
     for branchCd, sheet_name in OUTLET_TARGETS:
         crawl_outlet(branchCd, sheet_name)
 
-    print("\n🎉 전체 아울렛 크롤링 및 저장 완료!")
+    print("\n\ud83c\udf89 \uc804체 아울레이트 크롤링 및 저장 완료!")
 
 if __name__ == "__main__":
     main()
