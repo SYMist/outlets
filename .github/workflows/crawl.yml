@@ -2,8 +2,8 @@ name: Run Outlet Crawler
 
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *'  # 매일 00:00 UTC → 한국 시간 09:00
+  workflow_dispatch:     # 수동 실행 가능
 
 jobs:
   crawl:
@@ -20,23 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install gspread oauth2client selenium beautifulsoup4
-          sudo apt-get update
-          sudo apt-get install -y unzip wget curl
-
-      - name: Install matching ChromeDriver
-        run: |
-          # Get full Chrome version
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+')
-          echo "✅ Detected full Chrome version: $CHROME_VERSION"
-
-          DRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip"
-          echo "🔗 Downloading: $DRIVER_URL"
-          
-          wget -O chromedriver.zip "$DRIVER_URL"
-          unzip chromedriver.zip
-          sudo mv chromedriver-linux64/chromedriver /usr/bin/chromedriver
-          sudo chmod +x /usr/bin/chromedriver
+          pip install gspread oauth2client beautifulsoup4 requests
 
       - name: Run crawler
         env:
