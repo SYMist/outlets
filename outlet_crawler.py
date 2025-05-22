@@ -1,7 +1,6 @@
 import time
 import gspread
 import os
-from datetime import datetime
 from bs4 import BeautifulSoup
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium import webdriver
@@ -38,23 +37,34 @@ def process_price_text(price_text):
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
-    time.sleep(3)
 
     try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "#eventList"))
+        )
         page_btns = driver.find_elements(By.CSS_SELECTOR, "#paging > a")
         if page <= len(page_btns):
-            page_btns[page - 1].click()
-            time.sleep(2)
+            driver.execute_script("arguments[0].click();", page_btns[page - 1])
+            time.sleep(3)
         else:
             print(f"⚠ 페이지 {page} 없음. 스킵.")
             return []
-    except Exception as e:
-        print(f"❌ getContents 실행 실패 또는 정의되지 않음: {e}")
-        print(f"⚠ 페이지 {page} 없음. 스킵.")
-        return []
 
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    return soup.select("#eventList > li")
+        # 디버그용 HTML 저장
+        page_html = driver.page_source
+        with open(f"debug_page_{page}.html", "w", encoding="utf-8") as f:
+            f.write(page_html)
+        print(f"🕵 저장된 HTML: debug_page_{page}.html")
+
+        soup = BeautifulSoup(page_html, "html.parser")
+        events = soup.select("#eventList > li")
+        if not events:
+            print(f"⚠ 페이지 {page} 이벤트 없음")
+        return events
+
+    except Exception as e:
+        print(f"❌ 이벤트 리스트 로딩 실패: {e}")
+        return []
 
 # --- 행사 상세페이지 크롤링
 def fetch_event_detail(driver, url):
@@ -104,7 +114,6 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
-    today = datetime.now().strftime("%Y-%m-%d")
 
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
     client = gspread.authorize(creds)
@@ -115,7 +124,7 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
-    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지", "업데이트 날짜"]
+    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지"]
 
     try:
         existing_data = worksheet.get_all_values()
@@ -125,7 +134,7 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         existing_data = []
 
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
-    filtered_new_rows = [row + [today] for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
+    filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
     print(f"✨ [{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
     if not filtered_new_rows:
