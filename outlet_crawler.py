@@ -1,7 +1,6 @@
 import time
 import gspread
 import os
-from datetime import datetime
 from bs4 import BeautifulSoup
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium import webdriver
@@ -9,6 +8,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from datetime import datetime
 
 # --- WebDriver 설정
 def setup_driver():
@@ -38,18 +38,20 @@ def process_price_text(price_text):
 def fetch_event_list(driver, branchCd, page):
     list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
     driver.get(list_url)
-    time.sleep(3)
 
     try:
-        page_btns = driver.find_elements(By.CSS_SELECTOR, "#paging > a")
-        if page <= len(page_btns):
-            page_btns[page - 1].click()
-            time.sleep(2)
-        else:
-            print(f"{page} 페이지 없음. 스킵.")
-            return []
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "eventpaging"))
+        )
+        print(f"[{branchCd}] {page}페이지 getContents 실행")
+        driver.execute_script(f"getContents('01', {page}, 0);")
+        time.sleep(2)
+
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "#eventList > li"))
+        )
     except Exception as e:
-        print(f"❌ 페이지 버튼 클릭 실패: {e}")
+        print(f"❌ getContents 실행 실패 또는 정의되지 않음: {e}")
         return []
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -113,8 +115,7 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols="20")
 
-    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크",
-               "혜택 설명", "브랜드", "제품명", "가격", "이미지", "업데이트 날짜"]
+    headers = ["제목", "기간", "상세 제목", "상세 기간", "썸네일", "상세 링크", "혜택 설명", "브랜드", "제품명", "가격", "이미지", "업데이트일"]
 
     try:
         existing_data = worksheet.get_all_values()
@@ -131,23 +132,27 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
         print(f"[{sheet_name}] 추가할 데이터 없음.")
         return
 
+    today = datetime.now().strftime("%Y-%m-%d")
+    for row in filtered_new_rows:
+        row.append(today)
+
     all_data = [headers] + filtered_new_rows + existing_data
     worksheet.clear()
     worksheet.update('A1', all_data)
 
-    print(f"[{sheet_name}] 총 {len(all_data) - 1}개 데이터 저장 완료.")
+    print(f"[{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
+    print(f"시트 링크: https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit")
 
 # --- 아울렛 하나 크롤링
 def crawl_outlet(branchCd, sheet_name):
     driver = setup_driver()
     new_rows = []
-    update_date = datetime.now().strftime("%Y-%m-%d")
 
     for page in range(1, 5):
         print(f"[{sheet_name}] 페이지 {page} 크롤링 중...")
         events = fetch_event_list(driver, branchCd, page)
         if not events:
-            print(f"[{sheet_name}] 페이지 {page} 이벤트 없음")
+            print(f"{page} 페이지 이벤트 없음")
             continue
 
         for event in events:
@@ -170,15 +175,15 @@ def crawl_outlet(branchCd, sheet_name):
                 detail["상세 기간"],
                 image_url,
                 detail_url,
-                " / ".join(detail["텍스트 설명"]),
+                " / ".join(detail["텍스트 설명"])
             ]
 
             if detail["상품 리스트"]:
                 for p in detail["상품 리스트"]:
-                    row = base_info + [p["브랜드"], p["제품명"], p["가격"], p["이미지"], update_date]
+                    row = base_info + [p["브랜드"], p["제품명"], p["가격"], p["이미지"]]
                     new_rows.append(row)
             else:
-                new_rows.append(base_info + ["", "", "", "", update_date])
+                new_rows.append(base_info + ["", "", "", ""])
 
     driver.quit()
     upload_to_google_sheet("outlet-data", sheet_name, new_rows)
@@ -194,7 +199,7 @@ def main():
     for branchCd, sheet_name in OUTLET_TARGETS:
         crawl_outlet(branchCd, sheet_name)
 
-    print("전체 아울렛 크롤링 완료")
+    print("\n전체 아울렛 크롤링 완료!")
 
 if __name__ == "__main__":
     main()
