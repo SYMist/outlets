@@ -1,21 +1,34 @@
-import requests
-import gspread
+import time
 import os
+import gspread
+import requests
 from datetime import datetime
+from urllib.parse import urlencode
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- API URL 목록
-OUTLET_APIS = {
-    "송도": "https://www.ehyundai.com/newPortal/SN/GetCmsContentsAJX.do?apiID=ifAppHdcms012&param=mblDmCd%3DD7402411320642%26evntCrdTypeCd%3D01%26pageSize%3D9%26page%3D{}",
-    "김포": "https://www.ehyundai.com/newPortal/SN/GetCmsContentsAJX.do?apiID=ifAppHdcms012&param=mblDmCd%3DD7202505356657%26evntCrdTypeCd%3D01%26pageSize%3D9%26page%3D{}",
-    "스페이스원": "https://www.ehyundai.com/newPortal/SN/GetCmsContentsAJX.do?apiID=ifAppHdcms012&param=mblDmCd%3DD7802505356730%26evntCrdTypeCd%3D01%26pageSize%3D9%26page%3D{}"
-}
+# 썸네일 주소 포맷 변환
+def format_thumbnail_url(img_path):
+    if not img_path:
+        return ""
+    if img_path.startswith("derivedImage/fileValue/"):
+        return "https://imgprism.ehyundai.com/" + img_path
+    return "https://www.ehyundai.com/" + img_path
 
-# --- 시트에 업로드
+# 날짜 포맷 변환
+def format_date_range(start, end):
+    def format_one(d):
+        return f"{d[:4]}.{d[4:6]}.{d[6:8]}"
+    try:
+        return f"{format_one(start)} ~ {format_one(end)}"
+    except:
+        return ""
+
+# Google Sheets 업로드
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
+
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(sheet_title)
@@ -37,80 +50,78 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     existing_links = {row[5] for row in existing_data if len(row) >= 6}
     filtered_new_rows = [row for row in new_rows if len(row) >= 6 and row[5] not in existing_links]
 
-    print(f"{sheet_name} - 신규 {len(filtered_new_rows)}개 항목 발견")
+    print(f"[{sheet_name}] 새로 추가할 항목 수: {len(filtered_new_rows)}개")
     if not filtered_new_rows:
-        print(f"{sheet_name} - 추가할 데이터 없음")
+        print(f"[{sheet_name}] 추가할 데이터 없음.")
         return
-
-    today = datetime.today().strftime("%Y-%m-%d")
-    for row in filtered_new_rows:
-        row.append(today)
 
     all_data = [headers] + filtered_new_rows + existing_data
     worksheet.clear()
-    worksheet.update("A1", all_data)
-    print(f"{sheet_name} - 시트 업데이트 완료")
+    worksheet.update('A1', all_data)
+    print(f"[{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
 
-# --- API 데이터 파싱
-def fetch_api_data(api_url):
-    try:
-        all_items = []
-        for page in range(1, 6):
-            url = api_url.format(page)
+# 하나의 아울렛 크롤링
+def crawl_outlet(outlet_name, base_url, sheet_name):
+    print(f"[{sheet_name}] 크롤링 시작")
+    page = 1
+    new_rows = []
+    today = datetime.today().strftime("%Y-%m-%d")
+
+    while True:
+        url = base_url.replace("page=1", f"page={page}")
+        try:
             res = requests.get(url)
             res.raise_for_status()
-            data = res.json()
-            items = data["result"]["items"]
+            data = res.json().get("result", {})
+            items = data.get("items", [])
             if not items:
                 break
-            all_items.extend(items)
-        return all_items
-    except Exception as e:
-        print("❌ API 요청 실패:", e)
-        return []
+        except Exception as e:
+            print(f"[{sheet_name}] 페이지 {page} 크롤링 실패: {e}")
+            break
 
-# --- 아울렛 크롤링
-def crawl_outlet(outlet_name, api_url, sheet_name):
-    print(f"{sheet_name} - 크롤링 시작")
-    items = fetch_api_data(api_url)
-    if not items:
-        print(f"{sheet_name} - 가져온 항목 없음")
-        return
+        for item in items:
+            title = item.get("evntCrdNm", "").replace("\r\n", " ").strip()
+            period = format_date_range(item.get("evntStrtDt", ""), item.get("evntEndDt", ""))
+            thumbnail = format_thumbnail_url(item.get("imgPath2") or item.get("imgPath"))
+            detail_url = f"https://www.ehyundai.com/StoryCard?eventCode={item.get('evntCrdCd')}"
+            benefit = item.get("evntPlceNm", "")
+            brand, product, price, image = "", "", "", ""
 
-    new_rows = []
-    for item in items:
-        title = item.get("evntCrdNm", "").replace("\r", " ").replace("\n", " ").strip()
-        start = item.get("evntStrtDt", "")[:8]
-        end = item.get("evntEndDt", "")[:8]
-        period = f"{format_date(start)} ~ {format_date(end)}" if start and end else ""
+            row = [title, period, "", "", thumbnail, detail_url, benefit, brand, product, price, image, today]
+            new_rows.append(row)
 
-        thumbnail = "https://www.ehyundai.com/" + item.get("imgPath2", "")
-        detail_link = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?evntCrdCd={item.get('evntCrdCd')}"
-        desc = item.get("evntPlceNm", "") or item.get("evntFlrCd", {}).get("label", "")
-        row = [title, period, "", "", thumbnail, detail_link, desc, "", "", "", ""]
-        new_rows.append(row)
+        page += 1
 
     upload_to_google_sheet("outlet-data", sheet_name, new_rows)
 
-def format_date(date_str):
-    try:
-        return f"{date_str[:4]}.{date_str[4:6]}.{date_str[6:8]}"
-    except:
-        return ""
-
-# --- 메인 실행
+# 메인
 def main():
-    print("크롤링 시작:", datetime.now())
     OUTLET_TARGETS = [
-        ("송도", OUTLET_APIS["송도"], "Sheet1"),
-        ("김포", OUTLET_APIS["김포"], "Sheet2"),
-        ("스페이스원", OUTLET_APIS["스페이스원"], "Sheet3"),
+        ("송도", "https://www.ehyundai.com/newPortal/SN/GetCmsContentsAJX.do?apiID=ifAppHdcms012&param=" + urlencode({
+            "mblDmCd": "D7402411320642",
+            "evntCrdTypeCd": "01",
+            "pageSize": 9,
+            "page": 1
+        }), "Sheet1"),
+        ("김포", "https://www.ehyundai.com/newPortal/SN/GetCmsContentsAJX.do?apiID=ifAppHdcms012&param=" + urlencode({
+            "mblDmCd": "D7202505356657",
+            "evntCrdTypeCd": "01",
+            "pageSize": 9,
+            "page": 1
+        }), "Sheet2"),
+        ("스페이스원", "https://www.ehyundai.com/newPortal/SN/GetCmsContentsAJX.do?apiID=ifAppHdcms012&param=" + urlencode({
+            "mblDmCd": "D7802505356730",
+            "evntCrdTypeCd": "01",
+            "pageSize": 9,
+            "page": 1
+        }), "Sheet3"),
     ]
 
-    for outlet_name, api_url, sheet_name in OUTLET_TARGETS:
-        crawl_outlet(outlet_name, api_url, sheet_name)
+    for name, url, sheet in OUTLET_TARGETS:
+        crawl_outlet(name, url, sheet)
 
-    print("전체 크롤링 완료:", datetime.now())
+    print("전체 아울렛 크롤링 완료.")
 
 if __name__ == "__main__":
     main()
