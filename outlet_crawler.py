@@ -1,4 +1,3 @@
-
 import time
 import gspread
 import os
@@ -23,7 +22,7 @@ def setup_driver():
 
 # --- getContents 함수 로드 대기
 def wait_for_getContents(driver, timeout=10):
-    for i in range(timeout):
+    for _ in range(timeout):
         try:
             defined = driver.execute_script("return typeof getContents === 'function'")
             if defined:
@@ -204,8 +203,7 @@ def main():
     for branchCd, sheet_name in OUTLET_TARGETS:
         crawl_outlet(branchCd, sheet_name)
 
-    print("
-전체 아울렛 크롤링 완료")
+    print("전체 아울렛 크롤링 완료")
 
 if __name__ == "__main__":
     main()
