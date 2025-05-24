@@ -13,12 +13,35 @@ from selenium.webdriver.support import expected_conditions as EC
 def setup_driver():
     options = Options()
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--headless")
+    options.add_argument("--headless")  # 구버전 headless 모드 사용
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     driver = webdriver.Chrome(options=options)
     return driver
+
+# --- getContents 로딩 대기
+def wait_for_getContents(driver, timeout=10):
+    for _ in range(timeout):
+        try:
+            if driver.execute_script("return typeof getContents === 'function';"):
+                return True
+        except:
+            pass
+        time.sleep(1)
+    return False
+
+# --- 총 페이지 수 가져오기
+def get_total_pages(driver):
+    try:
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        paging_div = soup.select_one("#eventpaging")
+        if not paging_div:
+            return 1
+        page_links = paging_div.find_all("a")
+        return max([int(a.text.strip()) for a in page_links if a.text.strip().isdigit()] + [1])
+    except:
+        return 1
 
 # --- 가격 텍스트 처리
 def process_price_text(price_text):
@@ -33,28 +56,27 @@ def process_price_text(price_text):
     else:
         return price_text
 
-# --- 행사 리스트 페이지 크롤링
+# --- 행사 리스트 크롤링
 def fetch_event_list(driver, branchCd, page):
-    list_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
-    driver.get(list_url)
+    base_url = f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1"
+    driver.get(base_url)
     time.sleep(3)
 
+    if not wait_for_getContents(driver):
+        print(f"{page} 페이지 getContents 정의 안됨. 건너뜀.")
+        return []
+
     try:
-        pagination = driver.find_elements(By.CSS_SELECTOR, "#eventpaging a")
-        if page - 1 < len(pagination):
-            pagination[page - 1].click()
-            time.sleep(2)
-        else:
-            print(f"{page} 페이지 없음. 스킵.")
-            return []
+        driver.execute_script(f"getContents('01', {page}, 0);")
+        time.sleep(3)
     except Exception as e:
-        print(f"페이지 버튼 클릭 실패: {e}")
+        print(f"{page} 페이지 getContents 실행 실패: {e}")
         return []
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
     return soup.select("#eventList > li")
 
-# --- 행사 상세페이지 크롤링
+# --- 행사 상세 크롤링
 def fetch_event_detail(driver, url):
     try:
         driver.get(url)
@@ -97,13 +119,10 @@ def fetch_event_detail(driver, url):
         print(f"❌ 상세페이지 크롤링 실패: {e}")
         return {"상세 제목": "", "상세 기간": "", "텍스트 설명": [], "상품 리스트": []}
 
-# --- Google Sheets에 업로드
+# --- Google Sheets 업로드
 def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    CREDENTIAL_PATH = os.path.join(BASE_DIR, "credentials.json")
-
-    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_PATH, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open(sheet_title)
 
@@ -133,15 +152,20 @@ def upload_to_google_sheet(sheet_title, sheet_name, new_rows):
     worksheet.clear()
     worksheet.update('A1', all_data)
 
-    print(f"[{sheet_name}] 총 {len(all_data)-1}개 데이터 저장 완료.")
+    print(f"[{sheet_name}] 총 {len(all_data) - 1}개 데이터 저장 완료.")
     print(f"시트 링크: https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit")
 
-# --- 아울렛 하나 크롤링
+# --- 아울렛 크롤링
 def crawl_outlet(branchCd, sheet_name):
     driver = setup_driver()
     new_rows = []
 
-    for page in range(1, 5):
+    driver.get(f"https://www.ehyundai.com/newPortal/SN/SN_0101000.do?branchCd={branchCd}&SN=1")
+    time.sleep(3)
+    total_pages = get_total_pages(driver)
+    print(f"[{sheet_name}] 총 페이지 수: {total_pages}")
+
+    for page in range(1, total_pages + 1):
         print(f"[{sheet_name}] 페이지 {page} 크롤링 중...")
         events = fetch_event_list(driver, branchCd, page)
         if not events:
