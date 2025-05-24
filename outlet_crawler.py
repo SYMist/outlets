@@ -20,16 +20,6 @@ def setup_driver():
     driver = webdriver.Chrome(options=options)
     return driver
 
-# --- getContents 함수 로드 대기 (WebDriverWait 방식)
-def wait_for_getContents(driver, timeout=20):
-    try:
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return typeof getContents === 'function'")
-        )
-        return True
-    except:
-        return False
-
 # --- 가격 텍스트 처리
 def process_price_text(price_text):
     if "정상가" in price_text and "판매가" in price_text:
@@ -49,15 +39,16 @@ def fetch_event_list(driver, branchCd, page):
     driver.get(list_url)
     time.sleep(3)
 
-    if not wait_for_getContents(driver):
-        print(f"{page} 페이지 getContents 정의 안됨. 건너뜀.")
-        return []
-
     try:
-        driver.execute_script(f"getContents('01', {page}, 0);")
-        time.sleep(2)
+        pagination = driver.find_elements(By.CSS_SELECTOR, "#eventpaging a")
+        if page - 1 < len(pagination):
+            pagination[page - 1].click()
+            time.sleep(2)
+        else:
+            print(f"{page} 페이지 없음. 스킵.")
+            return []
     except Exception as e:
-        print(f"{page} 페이지 getContents 실행 실패: {e}")
+        print(f"페이지 버튼 클릭 실패: {e}")
         return []
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
