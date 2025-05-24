@@ -2,7 +2,7 @@ name: Run Outlet Crawler
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 00:00 UTC → 한국 시간 09:00
+    - cron: '0 0 * * *'  # 매일 00:00 UTC → 한국 시간 오전 9시
   workflow_dispatch:     # 수동 실행 가능
 
 jobs:
@@ -20,12 +20,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install gspread oauth2client beautifulsoup4 selenium
+          pip install gspread oauth2client beautifulsoup4 selenium requests
 
       - name: Install Chrome and chromedriver
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
+          sudo rm -f /usr/bin/chromedriver
           sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
 
       - name: Run crawler
