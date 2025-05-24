@@ -13,24 +13,22 @@ from selenium.webdriver.support import expected_conditions as EC
 def setup_driver():
     options = Options()
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--headless")  # 안정성을 위해 구버전 headless 사용
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     driver = webdriver.Chrome(options=options)
     return driver
 
-# --- getContents 함수 로드 대기
-def wait_for_getContents(driver, timeout=10):
-    for _ in range(timeout):
-        try:
-            defined = driver.execute_script("return typeof getContents === 'function'")
-            if defined:
-                return True
-        except:
-            pass
-        time.sleep(1)
-    return False
+# --- getContents 함수 로드 대기 (WebDriverWait 방식)
+def wait_for_getContents(driver, timeout=20):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return typeof getContents === 'function'")
+        )
+        return True
+    except:
+        return False
 
 # --- 가격 텍스트 처리
 def process_price_text(price_text):
